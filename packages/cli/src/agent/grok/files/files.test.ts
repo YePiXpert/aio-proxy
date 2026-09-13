@@ -399,24 +399,82 @@ test('a stalled directory listing is unverifiable within the budget', async () =
   }
 });
 
-test('a stalled Grok file unlink is unverifiable within the budget', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'aio-grok-stalled-unlink-'));
+test('unlinkGrokFile does not return until the destination unlink finishes', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'aio-grok-unlink-commit-'));
   const path = join(root, 'credential.json');
+  let finishUnlink: (() => void) | undefined;
+  const unlinkStarted = Promise.withResolvers<void>();
   const realUnlink = fsPromises.unlink.bind(fsPromises);
   const unlinkSpy = spyOn(fsPromises, 'unlink').mockImplementation(async (target) => {
-    if (target === path) return new Promise(() => {});
+    if (target === path) {
+      unlinkStarted.resolve();
+      await new Promise<void>((resolve) => {
+        finishUnlink = resolve;
+      });
+    }
     return realUnlink(target);
   });
   try {
     await writeFile(path, 'token\n', { mode: 0o600 });
     const expected = await readGrokPrivateFile(path, 'credential');
-    const started = Date.now();
-    await expect(
-      unlinkGrokFile(path, expected, { deadline: Date.now() + 80, signal: AbortSignal.timeout(80) }, async () => {}),
-    ).rejects.toThrow(/unverifiable/i);
-    expect(Date.now() - started).toBeLessThan(1_000);
+    const done = unlinkGrokFile(path, expected, budget(), async () => {});
+    await unlinkStarted.promise;
+    let settled = false;
+    void done.then(
+      () => {
+        settled = true;
+      },
+      () => {
+        settled = true;
+      },
+    );
+    await Bun.sleep(50);
+    expect(settled).toBe(false);
+    finishUnlink?.();
+    await done;
+    expect(await Bun.file(path).exists()).toBe(false);
   } finally {
     unlinkSpy.mockRestore();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('replaceGrokFile does not return until the destination rename finishes', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'aio-grok-rename-commit-'));
+  const path = join(root, 'config.toml');
+  let finishRename: (() => void) | undefined;
+  const renameStarted = Promise.withResolvers<void>();
+  const realRename = fsPromises.rename.bind(fsPromises);
+  const renameSpy = spyOn(fsPromises, 'rename').mockImplementation(async (from, to) => {
+    if (to === path) {
+      renameStarted.resolve();
+      await new Promise<void>((resolve) => {
+        finishRename = resolve;
+      });
+    }
+    return realRename(from, to);
+  });
+  try {
+    await writeFile(path, '[ui]\ntheme = "dark"\n', { mode: 0o600 });
+    const expected = await readGrokFile(path);
+    const done = replaceGrokFile(path, '[ui]\ntheme = "light"\n', expected, budget(), async () => {});
+    await renameStarted.promise;
+    let settled = false;
+    void done.then(
+      () => {
+        settled = true;
+      },
+      () => {
+        settled = true;
+      },
+    );
+    await Bun.sleep(50);
+    expect(settled).toBe(false);
+    finishRename?.();
+    await done;
+    expect(await readFile(path, 'utf8')).toBe('[ui]\ntheme = "light"\n');
+  } finally {
+    renameSpy.mockRestore();
     await rm(root, { recursive: true, force: true });
   }
 });

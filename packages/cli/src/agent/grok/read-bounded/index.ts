@@ -4,6 +4,8 @@ export {
   readBoundedStream,
   readOpenFileText,
   remainingReadMs,
+  settleGrokMutations,
+  trackGrokMutation,
   withHandleBudget,
   withReadBudget,
   type ReadableFileHandle,

@@ -1,7 +1,7 @@
 import { expect, spyOn, test } from 'bun:test';
 import * as fsPromises from 'node:fs/promises';
-import { chmod, link, mkdir, readFile, rm, stat, symlink, unlink, writeFile } from 'node:fs/promises';
-import { homedir } from 'node:os';
+import { chmod, link, mkdir, mkdtemp, readFile, rm, stat, symlink, unlink, writeFile } from 'node:fs/promises';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import * as core from '@aio-proxy/core';
@@ -294,6 +294,53 @@ test('withGrokLock rejects when ownership check outlives the budget', async () =
     expect(performance.now() - started).toBeLessThan(1_000);
   } finally {
     acquire.mockRestore();
+  }
+});
+
+test('withGrokLock does not release until a destination rename finishes', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'aio-grok-rename-lock-'));
+  const path = join(root, 'config.toml');
+  let finishRename: (() => void) | undefined;
+  const renameStarted = Promise.withResolvers<void>();
+  const realRename = fsPromises.rename.bind(fsPromises);
+  const rename = spyOn(fsPromises, 'rename').mockImplementation(async (from, to) => {
+    if (to === path) {
+      renameStarted.resolve();
+      await new Promise<void>((resolve) => {
+        finishRename = resolve;
+      });
+    }
+    return realRename(from, to);
+  });
+  try {
+    await writeFile(path, '[ui]\ntheme = "dark"\n', { mode: 0o600 });
+    const expected = await grokFiles.readGrokFile(path);
+    const controller = new AbortController();
+    const short = { deadline: Date.now() + 5_000, signal: controller.signal };
+    const done = grokLifecycle.withGrokLock(root, short, async () => {
+      await grokFiles.replaceGrokFile(path, '[ui]\ntheme = "light"\n', expected, short, async () => {});
+    });
+    await renameStarted.promise;
+    controller.abort();
+    await Bun.sleep(50);
+    let settled = false;
+    void done.then(
+      () => {
+        settled = true;
+      },
+      () => {
+        settled = true;
+      },
+    );
+    expect(settled).toBe(false);
+    expect(await core.observeProcessFileLock(join(root, '.aio-proxy.lock'))).toBeDefined();
+    finishRename?.();
+    await expect(done).rejects.toThrow(/unverifiable/i);
+    expect(await core.observeProcessFileLock(join(root, '.aio-proxy.lock'))).toBeUndefined();
+    expect(await readFile(path, 'utf8')).toBe('[ui]\ntheme = "light"\n');
+  } finally {
+    rename.mockRestore();
+    await rm(root, { recursive: true, force: true });
   }
 });
 

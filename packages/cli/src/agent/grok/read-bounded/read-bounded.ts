@@ -11,6 +11,23 @@ export type ReadableFileHandle = {
 export const remainingReadMs = (budget?: GrokDeadline): number =>
   budget === undefined ? DEFAULT_GROK_READ_MS : Math.max(0, budget.deadline - Date.now());
 
+const grokMutations = new Set<Promise<unknown>>();
+
+/** Keep uncancelable dest mutations tracked so the process lock is not released while they are in flight. */
+export function trackGrokMutation<T>(operation: Promise<T>): Promise<T> {
+  grokMutations.add(operation);
+  void operation.finally(() => {
+    grokMutations.delete(operation);
+  });
+  return operation;
+}
+
+export async function settleGrokMutations(): Promise<void> {
+  while (grokMutations.size > 0) {
+    await Promise.allSettled([...grokMutations]);
+  }
+}
+
 export async function withHandleBudget<T>(
   handle: Pick<ReadableFileHandle, 'close'>,
   budget: GrokDeadline | undefined,
@@ -47,6 +64,8 @@ export async function withReadBudget<T>(
     signal.addEventListener('abort', onAbort, { once: true });
   });
   try {
+    // Reads can be abandoned on budget expiry. Destination mutations must use
+    // trackGrokMutation() so withGrokLock can settle them before release.
     return await Promise.race([operation(signal), aborted]);
   } catch (error) {
     if (signal.aborted) throw limitError();

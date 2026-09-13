@@ -24,7 +24,7 @@ import {
   tryReadLeaf,
 } from './ownership';
 import { checkGrokPolicy } from './policy';
-import { remainingReadMs, withReadBudget } from './read-bounded';
+import { remainingReadMs, settleGrokMutations, withReadBudget } from './read-bounded';
 import { equalGrokLeaf, readGrokLeaf } from './toml';
 import type { GrokDeadline, GrokDeps, GrokMarker, GrokOwnership, TomlEdit } from './types';
 
@@ -94,6 +94,7 @@ export async function withGrokLock<T>(
   try {
     return await withReadBudget(budget, lockUnverifiable, () => action(lock));
   } finally {
+    await settleGrokMutations();
     await releaseGrokLock(lock);
   }
 }

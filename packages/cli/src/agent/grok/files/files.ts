@@ -7,6 +7,7 @@ import {
   DEFAULT_GROK_READ_MS,
   MAX_GROK_FILE_BYTES,
   readOpenFileText,
+  trackGrokMutation,
   withHandleBudget,
   withReadBudget,
 } from '../read-bounded';
@@ -186,7 +187,7 @@ export async function removeMatchingFile(identity: GrokFileIdentity, budget?: Gr
   const current = await inspectPath(identity.path, budget);
   if (current === undefined) return;
   if (current.dev !== identity.dev || current.ino !== identity.ino) return;
-  await withReadBudget(budget, pathUnverifiable, () => unlink(identity.path));
+  await trackGrokMutation(unlink(identity.path));
 }
 
 export async function removeMatchingDir(identity: GrokFileIdentity, budget?: GrokDeadline): Promise<void> {
@@ -194,7 +195,7 @@ export async function removeMatchingDir(identity: GrokFileIdentity, budget?: Gro
   if (current === undefined) return;
   if (current.dev !== identity.dev || current.ino !== identity.ino) return;
   try {
-    await withReadBudget(budget, pathUnverifiable, () => rmdir(identity.path));
+    await trackGrokMutation(rmdir(identity.path));
   } catch (error) {
     if (isFsCode(error, 'ENOTEMPTY') || isFsCode(error, 'ENOENT')) return;
     throw error;
@@ -264,7 +265,7 @@ export async function replaceGrokFile(
       throw new Error('Grok file changed during update. Configure while Grok is not also saving settings.');
     }
     budget.signal.throwIfAborted();
-    await withReadBudget(budget, unverifiable, () => rename(temporaryPath, path));
+    await trackGrokMutation(rename(temporaryPath, path));
     temporary = undefined;
     await syncDirectory(dirname(path), budget);
   } finally {
@@ -287,11 +288,7 @@ export async function unlinkGrokFile(
   }
   if (current === undefined) return;
   budget.signal.throwIfAborted();
-  await withReadBudget(
-    budget,
-    () => new Error('Grok file unverifiable'),
-    () => unlink(path),
-  );
+  await trackGrokMutation(unlink(path));
   await syncDirectory(dirname(path), budget);
 }
 
