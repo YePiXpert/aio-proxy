@@ -394,6 +394,7 @@
       "grok_auth_configuration": "Grok authorization cannot continue because the configuration is not current.",
       "grok_auth_temporary": "Grok authorization failed temporarily. Retry.",
       "grok_policy_conflict": "Grok routing conflict: {fields}.",
+      "grok_endpoint_changed": "Grok is already configured for a different proxy endpoint. Remove the integration, then configure it again.",
       "grok_retained_files": "Retained files: {files}.",
       "grok_skipped_fields": "Skipped fields: {fields}."
     }

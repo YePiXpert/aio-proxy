@@ -394,6 +394,7 @@
       "grok_auth_configuration": "構成が最新ではないため、Grok の認可を続行できません。",
       "grok_auth_temporary": "Grok の認可が一時的に失敗しました。再試行してください。",
       "grok_policy_conflict": "Grok のルーティング競合: {fields}。",
+      "grok_endpoint_changed": "Grok は別のプロキシエンドポイント向けに構成済みです。統合を削除してから再構成してください。",
       "grok_retained_files": "保持したファイル: {files}。",
       "grok_skipped_fields": "スキップしたフィールド: {fields}。"
     }

@@ -394,6 +394,7 @@
       "grok_auth_configuration": "구성이 최신이 아니어서 Grok 인증을 계속할 수 없습니다.",
       "grok_auth_temporary": "Grok 인증이 일시적으로 실패했습니다. 다시 시도하세요.",
       "grok_policy_conflict": "Grok 라우팅 충돌: {fields}.",
+      "grok_endpoint_changed": "Grok이 다른 프록시 엔드포인트로 이미 구성되어 있습니다. 통합을 제거한 다음 다시 구성하세요.",
       "grok_retained_files": "유지된 파일: {files}.",
       "grok_skipped_fields": "건너뛴 필드: {fields}."
     }

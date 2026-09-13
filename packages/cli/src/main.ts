@@ -341,6 +341,7 @@ export function formatCliError(err: unknown, locale: Parameters<typeof formatUse
     if (conflict?.[1] !== undefined) return { message: m['cli.agent.grok_policy_conflict']({ fields: conflict[1] }) };
     const modified = /^Grok configuration modified: (.+)$/u.exec(err.message);
     if (modified?.[1] !== undefined) return { message: m['cli.agent.configuration_modified']({ fields: modified[1] }) };
+    if (err.message === 'Grok endpoint changed') return { message: m['cli.agent.grok_endpoint_changed']() };
   }
   if (err instanceof CommanderError || isKnownCliUserError(err)) {
     return { message: err.message };

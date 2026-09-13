@@ -73,9 +73,15 @@ describe('cli rendering', () => {
     await setLocale('en');
     try {
       const formatted = formatCliError(new Error('Grok configuration modified: models.default'), 'en');
+      const endpoint = formatCliError(new Error('Grok endpoint changed'), 'en');
 
       expect(formatted.message).toBe('Grok configuration has been modified: models.default.');
       expect(formatted.message).not.toBe('Unexpected internal error');
+      expect(endpoint.message).toBe(
+        'Grok is already configured for a different proxy endpoint. Remove the integration, then configure it again.',
+      );
+      expect(endpoint.message).not.toContain('19000');
+      expect(endpoint.message).not.toBe('Unexpected internal error');
     } finally {
       await setLocale(originalLocale);
     }

@@ -143,6 +143,7 @@ const AGENT_KEYS = [
   'cli.agent.grok_auth_configuration',
   'cli.agent.grok_auth_temporary',
   'cli.agent.grok_policy_conflict',
+  'cli.agent.grok_endpoint_changed',
   'cli.agent.grok_retained_files',
   'cli.agent.grok_skipped_fields',
 ] as const;
