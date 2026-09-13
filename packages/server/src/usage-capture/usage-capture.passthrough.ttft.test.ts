@@ -123,6 +123,30 @@ describe('usage capture passthrough ttft', () => {
     expect(typeof ttftMs).toBe('number');
   });
 
+  test('does not invent a content gap from output_item.done after a Responses text delta', async () => {
+    const observation = createAttemptResponseObservation({ startedAt: 0 });
+    const captured = createUsageCapture().passthrough({
+      response: new Response(
+        'event: response.output_text.delta\ndata: {"type":"response.output_text.delta","delta":"hi"}\n\n' +
+          'event: response.output_item.done\n' +
+          'data: {"type":"response.output_item.done","item":{"type":"message","content":[{"type":"output_text","text":"hi"}]}}\n\n' +
+          'event: response.completed\n' +
+          'data: {"type":"response.completed","response":{"status":"completed","usage":{"input_tokens":1,"output_tokens":1}}}\n\n',
+        { headers: { 'content-type': 'text/event-stream' } },
+      ),
+      protocol: ProviderProtocol.OpenAIResponse,
+      providerId: 'provider',
+      modelId: 'model',
+      startedAt: 0,
+      observation,
+    });
+    await drain(captured.value);
+    const completion = await captured.completion;
+    expect(completion.outcome).toBe('success');
+    expect(observation.snapshot().contentGapP95Ms).toBeUndefined();
+    expect('ttftMs' in completion ? completion.ttftMs : undefined).toEqual(expect.any(Number));
+  });
+
   test('omits ttft for OpenAI Responses streams that only complete tool items', async () => {
     const captured = ssePassthrough(
       'event: response.output_item.done\n' +

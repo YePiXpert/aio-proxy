@@ -6,8 +6,6 @@ import { assertNever, nonEmptyString } from './shared';
 // Whether one parsed SSE event carries generated content (text or reasoning),
 // aligned with the streaming path's text-delta/reasoning-delta TTFT trigger.
 // Lifecycle/metadata frames (response.created, message_start, ping) return false.
-// OpenAI Responses also treats a completed message/reasoning `output_item.done`
-// with non-empty text as content: some relays omit incremental *.delta events.
 export function hasContentDelta(protocol: ProviderProtocol, eventType: string | undefined, value: unknown): boolean {
   switch (protocol) {
     case ProviderProtocol.OpenAICompatible:
@@ -66,16 +64,24 @@ function openAICompatibleContent(value: unknown): boolean {
 
 function openAIResponsesContent(eventType: string | undefined, value: unknown): boolean {
   const type = eventType ?? (isPlainObject(value) ? value['type'] : undefined);
-  if (
+  return (
     type === 'response.output_text.delta' ||
     type === 'response.reasoning_text.delta' ||
     type === 'response.reasoning_summary_text.delta'
-  ) {
-    return true;
-  }
-  // Some Responses relays buffer the whole message or reasoning item and emit
-  // it on output_item.done with no preceding *.delta frames. Count that as
-  // first content so TTFT is recorded; empty shells and tool items still do not.
+  );
+}
+
+// Some Responses relays buffer the whole message or reasoning item and emit
+// it on output_item.done with no preceding *.delta frames. Use only when no
+// incremental content has been seen, so customary done-after-delta frames do
+// not invent a content gap. Empty shells and tool items still do not count.
+export function hasTtftFallbackContent(
+  protocol: ProviderProtocol,
+  eventType: string | undefined,
+  value: unknown,
+): boolean {
+  if (protocol !== ProviderProtocol.OpenAIResponse) return false;
+  const type = eventType ?? (isPlainObject(value) ? value['type'] : undefined);
   if (type !== 'response.output_item.done' || !isPlainObject(value)) return false;
   return openAIResponsesItemHasGeneratedText(value['item']);
 }
