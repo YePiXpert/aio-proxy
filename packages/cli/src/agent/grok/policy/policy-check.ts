@@ -194,9 +194,12 @@ const checkUrls = (
 ): void => {
   for (const [id, spec] of Object.entries(tables)) {
     for (const key of ['base_url', 'api_base_url'] as const) {
-      const value = asString(spec[key]);
-      if (value === undefined) continue;
-      if (originOf(value) !== expectedOrigin) pushUnique(conflicts, `${section}.${id}.${key}`);
+      const raw = spec[key];
+      if (raw === undefined) continue;
+      const value = asString(raw);
+      if (value === undefined || originOf(value) !== expectedOrigin) {
+        pushUnique(conflicts, `${section}.${id}.${key}`);
+      }
     }
   }
 };

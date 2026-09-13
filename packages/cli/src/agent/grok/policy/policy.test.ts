@@ -449,6 +449,11 @@ test('a same-origin model provider Authorization header is refused', () => {
   expect(conflicts.join(',')).not.toContain(SECRET);
 });
 
+test('a present non-string model URL is refused', () => {
+  const text = `[model.foo]\nbase_url = false\n`;
+  expect(checkGrokPolicy(text, ENDPOINT, COMMAND, emptyPolicy)).toContain('model.foo.base_url');
+});
+
 test('an unparseable model URL is refused', () => {
   const text = `[model.bad]\nbase_url = "not-a-url"\n`;
   expect(checkGrokPolicy(text, ENDPOINT, COMMAND, emptyPolicy)).toContain('model.bad.base_url');
