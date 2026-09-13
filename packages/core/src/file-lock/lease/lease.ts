@@ -40,11 +40,16 @@ const parseRecord = (text: string): LockRecord | undefined => {
       typeof value['pid'] !== 'number' ||
       !Number.isSafeInteger(value['pid']) ||
       typeof value['owner'] !== 'string' ||
-      typeof value['createdAt'] !== 'number' ||
-      typeof value['starttime'] !== 'string'
+      typeof value['createdAt'] !== 'number'
     )
       return undefined;
-    return { pid: value['pid'], owner: value['owner'], createdAt: value['createdAt'], starttime: value['starttime'] };
+    if (value['starttime'] !== undefined && typeof value['starttime'] !== 'string') return undefined;
+    return {
+      pid: value['pid'],
+      owner: value['owner'],
+      createdAt: value['createdAt'],
+      starttime: typeof value['starttime'] === 'string' ? value['starttime'] : STARTTIME_UNAVAILABLE,
+    };
   } catch {
     return undefined;
   }

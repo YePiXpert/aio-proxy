@@ -1,3 +1,4 @@
+import { lstat } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { observeProcessFileLock } from '@aio-proxy/core';
@@ -34,6 +35,7 @@ import {
   peekManagedFormat,
   recoverGrokOwnership,
 } from './ownership';
+import { withReadBudget } from './read-bounded';
 import { equalGrokLeaf } from './toml';
 import type { GrokAuthObservation, GrokContext, GrokDeadline, GrokDeps, GrokInspection, GrokMarker } from './types';
 
@@ -52,9 +54,59 @@ const GrokObservationSchema = z
   })
   .passthrough();
 
+const FRESH_INCOMPLETE_LOCK_MS = 1_000;
+const lockUnverifiable = (): Error => new Error('Grok lock unverifiable');
+
+const isCompleteLockRecord = (text: string): boolean => {
+  try {
+    const value: unknown = JSON.parse(text);
+    return (
+      isPlainObject(value) &&
+      typeof value['pid'] === 'number' &&
+      Number.isSafeInteger(value['pid']) &&
+      typeof value['owner'] === 'string' &&
+      typeof value['createdAt'] === 'number' &&
+      (value['starttime'] === undefined || typeof value['starttime'] === 'string')
+    );
+  } catch {
+    return false;
+  }
+};
+
+async function delayWithinBudget(budget: GrokDeadline, milliseconds: number): Promise<void> {
+  await withReadBudget(budget, lockUnverifiable, async (signal) => {
+    await new Promise<void>((resolve, reject) => {
+      const timeout = setTimeout(resolve, milliseconds);
+      const abort = (): void => {
+        clearTimeout(timeout);
+        reject(signal.reason);
+      };
+      signal.addEventListener('abort', abort, { once: true });
+      if (signal.aborted) abort();
+    });
+  });
+}
+
+async function shouldRetryIncompleteLock(path: string, budget: GrokDeadline): Promise<boolean> {
+  return withReadBudget(budget, lockUnverifiable, async () => {
+    const file = Bun.file(path);
+    if (!(await file.exists())) return false;
+    const stats = await lstat(path);
+    if (Date.now() - stats.mtimeMs >= FRESH_INCOMPLETE_LOCK_MS) return false;
+    return !isCompleteLockRecord(await file.text());
+  });
+}
+
 async function observeGrokLockOwner(root: string, budget: GrokDeadline): Promise<string | undefined> {
+  const path = join(root, '.aio-proxy.lock');
+  while (!budget.signal.aborted) {
+    const observed = await withReadBudget(budget, lockUnverifiable, () => observeProcessFileLock(path));
+    if (observed !== undefined) return observed.owner;
+    if (!(await shouldRetryIncompleteLock(path, budget))) return undefined;
+    await delayWithinBudget(budget, 25);
+  }
   budget.signal.throwIfAborted();
-  return (await observeProcessFileLock(join(root, '.aio-proxy.lock')))?.owner;
+  return undefined;
 }
 
 export async function readGrokObservation(

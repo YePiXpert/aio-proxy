@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { acquireProcessFileLock, type ProcessFileLock } from '@aio-proxy/core';
 
 import {
+  cleanupBudget,
   readGrokFile,
   readGrokPrivateFile,
   replaceGrokFile,
@@ -22,7 +23,7 @@ import {
   peekManagedFormat,
 } from './ownership';
 import { checkGrokPolicy } from './policy';
-import { withReadBudget } from './read-bounded';
+import { remainingReadMs, withReadBudget } from './read-bounded';
 import { equalGrokLeaf, readGrokLeaf } from './toml';
 import type { GrokDeadline, GrokDeps, GrokMarker, GrokOwnership, GrokPath, TomlEdit } from './types';
 
@@ -64,6 +65,18 @@ export const tryReadLeaf = (text: string, path: GrokPath) => {
   }
 };
 
+const lockUnverifiable = (): Error => new Error('Grok lock unverifiable');
+const isProcessLockWaitTimeout = (error: unknown): boolean =>
+  error instanceof Error && error.message.startsWith('Timed out waiting for process lock:');
+
+async function releaseGrokLock(lock: ProcessFileLock): Promise<void> {
+  try {
+    await withReadBudget(cleanupBudget(), lockUnverifiable, () => lock.release());
+  } catch {
+    // A stalled release must not replace the operation result or original failure.
+  }
+}
+
 export async function withGrokLock<T>(
   root: string,
   budget: GrokDeadline,
@@ -71,24 +84,24 @@ export async function withGrokLock<T>(
 ): Promise<T> {
   const path = join(root, '.aio-proxy.lock');
   let acquiring: Promise<ProcessFileLock> | undefined;
-  let lock: ProcessFileLock;
-  try {
-    lock = await withReadBudget(
-      budget,
-      () => new Error('Grok lock unverifiable'),
-      (signal) => {
+  let lock: ProcessFileLock | undefined;
+  while (lock === undefined) {
+    try {
+      lock = await withReadBudget(budget, lockUnverifiable, (signal) => {
         acquiring = acquireProcessFileLock(path, signal);
         return acquiring;
-      },
-    );
-  } catch (error) {
-    void acquiring?.then((acquired) => acquired.release()).catch(() => undefined);
-    throw error;
+      });
+    } catch (error) {
+      void acquiring?.then((acquired) => releaseGrokLock(acquired)).catch(() => undefined);
+      acquiring = undefined;
+      if (!budget.signal.aborted && remainingReadMs(budget) > 0 && isProcessLockWaitTimeout(error)) continue;
+      throw error;
+    }
   }
   try {
     return await action(lock);
   } finally {
-    await lock.release();
+    await releaseGrokLock(lock);
   }
 }
 

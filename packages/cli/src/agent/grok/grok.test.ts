@@ -11,6 +11,7 @@ import {
   configureGrok,
   configureGrokForTest,
   inspectGrok,
+  readGrokObservation,
   removeGrok,
   removeGrokForTest,
   withGrokInstallation,
@@ -253,6 +254,58 @@ test('withGrokLock releases a lock that arrives after the budget expires', async
     expect(released).toBe(true);
   } finally {
     acquire.mockRestore();
+  }
+});
+
+test('withGrokLock retries after the shared lock wait timeout while budget remains', async () => {
+  let attempts = 0;
+  const acquire = spyOn(core, 'acquireProcessFileLock').mockImplementation(async () => {
+    attempts += 1;
+    if (attempts === 1) throw new Error('Timed out waiting for process lock: /tmp/grok-lock-retry');
+    return {
+      owner: 'second',
+      withOwnership: async (action) => action(async () => {}),
+      withOwnershipFence: async (action) => action(async () => {}),
+      release: async () => {},
+    };
+  });
+  try {
+    const budget = { deadline: Date.now() + 5_000, signal: AbortSignal.timeout(5_000) };
+    await expect(grokLifecycle.withGrokLock('/tmp/grok-lock-retry', budget, async () => 'ok')).resolves.toBe('ok');
+    expect(attempts).toBe(2);
+  } finally {
+    acquire.mockRestore();
+  }
+});
+
+test('withGrokLock does not hang when lock release stalls', async () => {
+  const acquire = spyOn(core, 'acquireProcessFileLock').mockImplementation(async () => ({
+    owner: 'held',
+    withOwnership: async (action) => action(async () => {}),
+    withOwnershipFence: async (action) => action(async () => {}),
+    release: () => new Promise(() => {}),
+  }));
+  try {
+    const started = performance.now();
+    const budget = { deadline: Date.now() + 5_000, signal: AbortSignal.timeout(5_000) };
+    await expect(grokLifecycle.withGrokLock('/tmp/grok-lock-release', budget, async () => 'ok')).resolves.toBe('ok');
+    expect(performance.now() - started).toBeLessThan(4_000);
+  } finally {
+    acquire.mockRestore();
+  }
+});
+
+test('readGrokObservation rejects when lock observation outlives the budget', async () => {
+  const observe = spyOn(core, 'observeProcessFileLock').mockImplementation(() => new Promise(() => {}));
+  try {
+    const started = performance.now();
+    const short = { deadline: Date.now() + 80, signal: AbortSignal.timeout(80) };
+    await expect(
+      readGrokObservation('/tmp/grok-observe-budget', '11111111-1111-4111-8111-111111111111', short),
+    ).rejects.toThrow(/unverifiable/i);
+    expect(performance.now() - started).toBeLessThan(1_000);
+  } finally {
+    observe.mockRestore();
   }
 });
 

@@ -42,6 +42,15 @@ test('records the live owner waited on as predecessor', async () => {
   }
 });
 
+test('reclaims a dead owner whose lock record omits starttime', async () => {
+  const root = await temporaryRoot();
+  const path = join(root, '.lock');
+  await writeFile(path, JSON.stringify({ pid: 99999999, owner: 'dead', createdAt: Date.now() }), { mode: 0o600 });
+  const reclaimed = await acquireProcessFileLock(path, AbortSignal.timeout(500));
+  await reclaimed.release();
+  await expect(observeProcessFileLock(path)).resolves.toBeUndefined();
+});
+
 test('reclaims a dead owner but blocks a live owner with an old heartbeat', async () => {
   const root = await temporaryRoot();
   const path = join(root, '.lock');
