@@ -14,12 +14,13 @@ export const remainingReadMs = (budget?: GrokDeadline): number =>
 const grokMutations = new Set<Promise<unknown>>();
 
 /** Keep uncancelable dest mutations tracked so the process lock is not released while they are in flight. */
-export function trackGrokMutation<T>(operation: Promise<T>): Promise<T> {
+export async function trackGrokMutation<T>(operation: Promise<T>): Promise<T> {
   grokMutations.add(operation);
-  void operation.finally(() => {
+  try {
+    return await operation;
+  } finally {
     grokMutations.delete(operation);
-  });
-  return operation;
+  }
 }
 
 export async function settleGrokMutations(): Promise<void> {
