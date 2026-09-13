@@ -17,6 +17,24 @@ export class GrokAuthError extends Error {
 const isAbortReason = (error: unknown): boolean =>
   (error instanceof DOMException || error instanceof Error) && error.name === 'AbortError';
 
+function isGrokInstallationStateError(error: Error): boolean {
+  if (error.message.startsWith('Grok configuration modified:') || error.message.startsWith('Grok routing conflict:')) {
+    return false;
+  }
+  return (
+    error.message.startsWith('Grok configuration') ||
+    error.message.startsWith('Grok installation') ||
+    error.message.startsWith('Grok marker') ||
+    error.message.startsWith('Grok ownership') ||
+    error.message.startsWith('Grok private directory') ||
+    error.message === 'Grok root is not a directory' ||
+    error.message === 'Grok credential invalid' ||
+    error.message === 'Grok credential binding mismatch' ||
+    error.message === 'Grok auth command missing' ||
+    error.message === 'installation id mismatch'
+  );
+}
+
 function rethrowAuthFailure(error: unknown): never {
   if (error instanceof GrokAuthError) throw error;
   if (isAbortReason(error)) throw new GrokAuthError('deadline');
@@ -25,6 +43,8 @@ function rethrowAuthFailure(error: unknown): never {
     if (error.code === 'expired_token') throw new GrokAuthError('deadline');
     throw new GrokAuthError('temporary');
   }
+  if (error instanceof Error && error.message === 'Grok login required') throw new GrokAuthError('login_required');
+  if (error instanceof Error && isGrokInstallationStateError(error)) throw new GrokAuthError('configuration');
   throw error;
 }
 

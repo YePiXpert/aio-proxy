@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { chmod, readFile, utimes, writeFile } from 'node:fs/promises';
+import { chmod, readFile, unlink, utimes, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { AgentRuntimeError } from '@aio-proxy/agent-provider-runtime';
@@ -716,6 +716,18 @@ test('invalid_grant on a normal helper starts device login', async () => {
     });
     expect(f.calls).toEqual({ device: 2, poll: 2, refresh: 1 });
     expect(JSON.parse(f.stdout[1]!).access_token).toBe(REFRESHED.access_token);
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test('a missing Grok configuration becomes a typed configuration error', async () => {
+  const f = await authFixture();
+  try {
+    await unlink(join(f.root, 'config.toml'));
+    await expect(grokAuth(f.input, f.deps)).rejects.toMatchObject({ name: 'GrokAuthError', code: 'configuration' });
+    expect(f.calls).toEqual({ device: 0, poll: 0, refresh: 0 });
+    expect(f.stdout).toEqual([]);
   } finally {
     await f.cleanup();
   }
