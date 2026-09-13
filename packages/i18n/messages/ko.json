@@ -390,6 +390,9 @@
       "host_managed_catalog": "host_managed",
       "grok_close_settings": "Grok 설정이 열려 있으면 닫아 AIO Proxy 구성을 다시 불러오세요.",
       "grok_login_required": "Grok 로그인이 필요합니다.",
+      "grok_auth_deadline": "Grok 인증이 시간 초과되었습니다.",
+      "grok_auth_configuration": "구성이 최신이 아니어서 Grok 인증을 계속할 수 없습니다.",
+      "grok_auth_temporary": "Grok 인증이 일시적으로 실패했습니다. 다시 시도하세요.",
       "grok_policy_conflict": "Grok 라우팅 충돌: {fields}.",
       "grok_retained_files": "유지된 파일: {files}.",
       "grok_skipped_fields": "건너뛴 필드: {fields}."

@@ -324,8 +324,17 @@ export const main = async (deps: CliDeps = defaultCliDeps) => {
 };
 
 export function formatCliError(err: unknown, locale: Parameters<typeof formatUserError>[1]) {
-  if (err instanceof GrokAuthError && err.code === 'login_required') {
-    return { message: m['cli.agent.grok_login_required']() };
+  if (err instanceof GrokAuthError) {
+    switch (err.code) {
+      case 'login_required':
+        return { message: m['cli.agent.grok_login_required']() };
+      case 'deadline':
+        return { message: m['cli.agent.grok_auth_deadline']() };
+      case 'configuration':
+        return { message: m['cli.agent.grok_auth_configuration']() };
+      case 'temporary':
+        return { message: m['cli.agent.grok_auth_temporary']() };
+    }
   }
   if (err instanceof Error) {
     const conflict = /^Grok routing conflict: (.+)$/u.exec(err.message);

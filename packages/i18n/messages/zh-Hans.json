@@ -390,6 +390,9 @@
       "host_managed_catalog": "host_managed",
       "grok_close_settings": "如果 Grok 设置已打开，请关闭以便重新加载 AIO Proxy 配置。",
       "grok_login_required": "需要 Grok 登录。",
+      "grok_auth_deadline": "Grok 授权已超时。",
+      "grok_auth_configuration": "Grok 授权无法继续，因为配置不是当前状态。",
+      "grok_auth_temporary": "Grok 授权暂时失败，请重试。",
       "grok_policy_conflict": "Grok 路由冲突：{fields}。",
       "grok_retained_files": "保留的文件：{files}。",
       "grok_skipped_fields": "跳过的字段：{fields}。"
