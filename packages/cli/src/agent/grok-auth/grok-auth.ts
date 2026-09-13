@@ -32,13 +32,21 @@ function isGrokInstallationStateError(error: Error): boolean {
     error.message === 'Grok credential invalid' ||
     error.message === 'Grok credential binding mismatch' ||
     error.message === 'Grok auth command missing' ||
+    error.message === 'Grok visible policy unverifiable' ||
     error.message === 'installation id mismatch'
+  );
+}
+
+function isLockBudgetError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    (error.message === 'Grok lock unverifiable' || error.message.startsWith('Timed out waiting for process lock:'))
   );
 }
 
 function rethrowAuthFailure(error: unknown): never {
   if (error instanceof GrokAuthError) throw error;
-  if (isAbortReason(error)) throw new GrokAuthError('deadline');
+  if (isAbortReason(error) || isLockBudgetError(error)) throw new GrokAuthError('deadline');
   if (error instanceof AgentRuntimeError) {
     if (error.code === 'invalid_grant' || error.code === 'access_denied') throw new GrokAuthError('login_required');
     if (error.code === 'expired_token') throw new GrokAuthError('deadline');

@@ -274,7 +274,7 @@ test.each([false, true])('auth rejects an unverifiable policy after configure (s
           },
         },
       ),
-    ).rejects.toThrow(/unverifiable/);
+    ).rejects.toMatchObject({ name: 'GrokAuthError', code: 'configuration' });
     expect(f.calls).toEqual({ device: 0, poll: 0, refresh: 0 });
     expect(f.stdout).toEqual([]);
   } finally {
@@ -716,6 +716,23 @@ test('invalid_grant on a normal helper starts device login', async () => {
     });
     expect(f.calls).toEqual({ device: 2, poll: 2, refresh: 1 });
     expect(JSON.parse(f.stdout[1]!).access_token).toBe(REFRESHED.access_token);
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test('a lock budget expiry becomes a typed deadline error', async () => {
+  const f = await authFixture();
+  try {
+    await expect(
+      grokAuth(f.input, {
+        ...f.deps,
+        readObservation: async () => {
+          throw new Error('Grok lock unverifiable');
+        },
+      }),
+    ).rejects.toMatchObject({ name: 'GrokAuthError', code: 'deadline' });
+    expect(f.stdout).toEqual([]);
   } finally {
     await f.cleanup();
   }
