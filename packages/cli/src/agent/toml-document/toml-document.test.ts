@@ -249,6 +249,9 @@ test('reads integers and string arrays and rejects unsupported types', () => {
       tomlVersion: '1.0',
     }),
   ).toThrow('TOML field must be a string, boolean, finite integer, or string array');
+  expect(() =>
+    editTomlFields('count = 1\n', [{ path: ['count'], next: { present: true, value: 1e21 } }], { tomlVersion: '1.0' }),
+  ).toThrow('TOML field must be a string, boolean, finite integer, or string array');
   const result = editTomlFields(source, [{ path: ['auth', 'label'], next: { present: true, value: 'b' } }], {
     tomlVersion: '1.0',
   });

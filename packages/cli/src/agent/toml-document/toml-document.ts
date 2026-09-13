@@ -124,7 +124,7 @@ const encodeEdit = (text: string, edit: TomlFieldEdit, syntax: TomlSyntax): Enco
     assertSafeRawLiteral(edit.next.raw, edit.next.value, syntax);
     return { path: edit.path, next: { present: true, encoded: edit.next.raw } };
   }
-  if (typeof edit.next.value === 'number' && !Number.isInteger(edit.next.value)) {
+  if (typeof edit.next.value === 'number' && !Number.isSafeInteger(edit.next.value)) {
     throw new Error(SCALAR_TYPE_ERROR);
   }
   const current = readTomlField(text, edit.path, syntax);
