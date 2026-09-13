@@ -270,20 +270,39 @@ test('replaceGrokFile removes the temporary file when the write fails', async ()
   }
 });
 
-test('a stalled private-directory creation is unverifiable within the budget', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'aio-grok-stalled-mkdir-'));
+test('createPrivateDir does not return until mkdir finishes', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'aio-grok-mkdir-commit-'));
   const path = join(root, 'aio-proxy');
+  let finishMkdir: (() => void) | undefined;
+  const mkdirStarted = Promise.withResolvers<void>();
   const realMkdir = fsPromises.mkdir.bind(fsPromises);
   const mkdirSpy = spyOn(fsPromises, 'mkdir').mockImplementation((async (target, options) => {
-    if (target === path) return new Promise(() => {});
+    if (target === path) {
+      mkdirStarted.resolve();
+      await new Promise<void>((resolve) => {
+        finishMkdir = resolve;
+      });
+    }
     return realMkdir(target, options);
   }) as typeof fsPromises.mkdir);
   try {
-    const started = Date.now();
-    await expect(
-      createPrivateDir(path, { deadline: Date.now() + 80, signal: AbortSignal.timeout(80) }),
-    ).rejects.toThrow(/unverifiable/i);
-    expect(Date.now() - started).toBeLessThan(1_000);
+    const done = createPrivateDir(path, budget());
+    await mkdirStarted.promise;
+    let settled = false;
+    void done.then(
+      () => {
+        settled = true;
+      },
+      () => {
+        settled = true;
+      },
+    );
+    await Bun.sleep(50);
+    expect(settled).toBe(false);
+    finishMkdir?.();
+    const identity = await done;
+    expect(identity.path).toBe(path);
+    expect((await lstat(path)).isDirectory()).toBe(true);
   } finally {
     mkdirSpy.mockRestore();
     await rm(root, { recursive: true, force: true });

@@ -344,6 +344,51 @@ test('withGrokLock does not release until a destination rename finishes', async 
   }
 });
 
+test('withGrokLock does not release until private-directory creation finishes', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'aio-grok-mkdir-lock-'));
+  const path = join(root, 'aio-proxy');
+  let finishMkdir: (() => void) | undefined;
+  const mkdirStarted = Promise.withResolvers<void>();
+  const realMkdir = fsPromises.mkdir.bind(fsPromises);
+  const mkdir = spyOn(fsPromises, 'mkdir').mockImplementation(async (target, options) => {
+    if (target === path) {
+      mkdirStarted.resolve();
+      await new Promise<void>((resolve) => {
+        finishMkdir = resolve;
+      });
+    }
+    return realMkdir(target, options);
+  });
+  try {
+    const controller = new AbortController();
+    const short = { deadline: Date.now() + 5_000, signal: controller.signal };
+    const done = grokLifecycle.withGrokLock(root, short, async () => {
+      await grokFiles.createPrivateDir(path, short);
+    });
+    await mkdirStarted.promise;
+    controller.abort();
+    await Bun.sleep(50);
+    let settled = false;
+    void done.then(
+      () => {
+        settled = true;
+      },
+      () => {
+        settled = true;
+      },
+    );
+    expect(settled).toBe(false);
+    expect(await core.observeProcessFileLock(join(root, '.aio-proxy.lock'))).toBeDefined();
+    finishMkdir?.();
+    await expect(done).rejects.toThrow(/unverifiable/i);
+    expect(await core.observeProcessFileLock(join(root, '.aio-proxy.lock'))).toBeUndefined();
+    expect((await fsPromises.lstat(path)).isDirectory()).toBe(true);
+  } finally {
+    mkdir.mockRestore();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test('withGrokLock does not hang when lock release stalls', async () => {
   const acquire = spyOn(core, 'acquireProcessFileLock').mockImplementation(async () => ({
     owner: 'held',

@@ -209,7 +209,7 @@ export async function captureIdentity(path: string, budget?: GrokDeadline): Prom
 
 export async function createPrivateDir(path: string, budget?: GrokDeadline): Promise<GrokFileIdentity> {
   try {
-    await withReadBudget(budget, pathUnverifiable, () => mkdir(path, { mode: 0o700 }));
+    await trackGrokMutation(mkdir(path, { mode: 0o700 }));
   } catch (error) {
     if (isFsCode(error, 'EEXIST')) reject('Grok private directory already exists');
     throw error;
