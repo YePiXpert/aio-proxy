@@ -119,6 +119,24 @@ test('an empty private directory left before the bootstrap journal is recovered'
   }
 });
 
+test('remove does not create a missing Grok home', async () => {
+  const parent = await mkdtemp(join(tmpdir(), 'aio-grok-absent-'));
+  const root = join(parent, 'GROK_HOME');
+  try {
+    await expect(
+      removeGrok(root, '0.21.0', {
+        now: Date.now,
+        randomUUID: () => '11111111-1111-4111-8111-111111111111',
+        policy: async () => ({ env: {}, sources: [] }),
+        revoke: async () => 'revoked',
+      }),
+    ).rejects.toThrow(/installation missing/);
+    expect(await Bun.file(root).exists()).toBe(false);
+  } finally {
+    await rm(parent, { recursive: true, force: true });
+  }
+});
+
 test('remove deletes an empty private directory left before the bootstrap journal', async () => {
   const f = await grokFixture();
   try {

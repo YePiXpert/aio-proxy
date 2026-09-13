@@ -161,6 +161,7 @@ async function removeGrokInternal(
 ): Promise<GrokRemoveResult> {
   const budget = createBudget(deps.now);
   const paths = grokPaths(root);
+  if ((await inspectPath(paths.root, budget)) === undefined) throw new Error('Grok installation missing');
   return withGrokLock(root, budget, async (lock) =>
     lock.withOwnership(async () => {
       budget.signal.throwIfAborted();
