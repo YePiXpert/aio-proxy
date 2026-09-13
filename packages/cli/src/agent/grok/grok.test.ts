@@ -278,6 +278,25 @@ test('withGrokLock retries after the shared lock wait timeout while budget remai
   }
 });
 
+test('withGrokLock rejects when ownership check outlives the budget', async () => {
+  const acquire = spyOn(core, 'acquireProcessFileLock').mockImplementation(async () => ({
+    owner: 'held',
+    withOwnership: () => new Promise(() => {}),
+    withOwnershipFence: () => new Promise(() => {}),
+    release: async () => {},
+  }));
+  try {
+    const started = performance.now();
+    const short = { deadline: Date.now() + 80, signal: AbortSignal.timeout(80) };
+    await expect(
+      grokLifecycle.withGrokLock('/tmp/grok-lock-owned', short, (lock) => lock.withOwnership(async () => 'ok')),
+    ).rejects.toThrow(/unverifiable/i);
+    expect(performance.now() - started).toBeLessThan(1_000);
+  } finally {
+    acquire.mockRestore();
+  }
+});
+
 test('withGrokLock does not hang when lock release stalls', async () => {
   const acquire = spyOn(core, 'acquireProcessFileLock').mockImplementation(async () => ({
     owner: 'held',

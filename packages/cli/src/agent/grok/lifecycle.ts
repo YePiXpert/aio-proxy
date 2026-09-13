@@ -92,7 +92,7 @@ export async function withGrokLock<T>(
     }
   }
   try {
-    return await action(lock);
+    return await withReadBudget(budget, lockUnverifiable, () => action(lock));
   } finally {
     await releaseGrokLock(lock);
   }
