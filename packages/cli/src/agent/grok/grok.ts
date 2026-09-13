@@ -1,7 +1,8 @@
 import { lstat } from 'node:fs/promises';
 import { join } from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
 
-import { observeProcessFileLock } from '@aio-proxy/core';
+import { isProcessLockRecord, observeProcessFileLock } from '@aio-proxy/core';
 import { isPlainObject } from 'es-toolkit/predicate';
 import { z } from 'zod';
 
@@ -23,7 +24,6 @@ import {
   persistOwnership,
   replaceOwnedFile,
   requireCurrent,
-  tryReadLeaf,
   withGrokLock,
 } from './lifecycle';
 import {
@@ -34,6 +34,7 @@ import {
   parseGrokOwnership,
   peekManagedFormat,
   recoverGrokOwnership,
+  tryReadLeaf,
 } from './ownership';
 import { withReadBudget } from './read-bounded';
 import { equalGrokLeaf } from './toml';
@@ -57,34 +58,8 @@ const GrokObservationSchema = z
 const FRESH_INCOMPLETE_LOCK_MS = 1_000;
 const lockUnverifiable = (): Error => new Error('Grok lock unverifiable');
 
-const isCompleteLockRecord = (text: string): boolean => {
-  try {
-    const value: unknown = JSON.parse(text);
-    return (
-      isPlainObject(value) &&
-      typeof value['pid'] === 'number' &&
-      Number.isSafeInteger(value['pid']) &&
-      typeof value['owner'] === 'string' &&
-      typeof value['createdAt'] === 'number' &&
-      (value['starttime'] === undefined || typeof value['starttime'] === 'string')
-    );
-  } catch {
-    return false;
-  }
-};
-
 async function delayWithinBudget(budget: GrokDeadline, milliseconds: number): Promise<void> {
-  await withReadBudget(budget, lockUnverifiable, async (signal) => {
-    await new Promise<void>((resolve, reject) => {
-      const timeout = setTimeout(resolve, milliseconds);
-      const abort = (): void => {
-        clearTimeout(timeout);
-        reject(signal.reason);
-      };
-      signal.addEventListener('abort', abort, { once: true });
-      if (signal.aborted) abort();
-    });
-  });
+  await withReadBudget(budget, lockUnverifiable, (signal) => delay(milliseconds, undefined, { signal }));
 }
 
 async function shouldRetryIncompleteLock(path: string, budget: GrokDeadline): Promise<boolean> {
@@ -93,7 +68,7 @@ async function shouldRetryIncompleteLock(path: string, budget: GrokDeadline): Pr
     if (!(await file.exists())) return false;
     const stats = await lstat(path);
     if (Date.now() - stats.mtimeMs >= FRESH_INCOMPLETE_LOCK_MS) return false;
-    return !isCompleteLockRecord(await file.text());
+    return !isProcessLockRecord(await file.text());
   });
 }
 

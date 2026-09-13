@@ -165,7 +165,7 @@ export function classifyChange(current: LeafValue, change: FieldChange): 'before
   return 'conflict';
 }
 
-const readRecoverableLeaf = (text: string, path: GrokPath): LeafValue | undefined => {
+export const tryReadLeaf = (text: string, path: GrokPath): LeafValue | undefined => {
   try {
     return readGrokLeaf(text, path);
   } catch {
@@ -232,7 +232,7 @@ export function recoverGrokOwnership(
   if (pending === undefined) return { ownership, conflicts: [] };
 
   const classifications = pending.changes.map((change) => {
-    const current = readRecoverableLeaf(text, change.path);
+    const current = tryReadLeaf(text, change.path);
     if (current === undefined) {
       return { change, result: 'conflict' as const };
     }

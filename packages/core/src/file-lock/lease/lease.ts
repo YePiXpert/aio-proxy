@@ -55,6 +55,8 @@ const parseRecord = (text: string): LockRecord | undefined => {
   }
 };
 
+export const isProcessLockRecord = (text: string): boolean => parseRecord(text) !== undefined;
+
 async function assertSafePath(path: string): Promise<void> {
   const absolute = resolve(path);
   let current = parse(absolute).root;

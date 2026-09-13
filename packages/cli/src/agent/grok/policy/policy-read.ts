@@ -2,6 +2,7 @@ import { constants, type Stats } from 'node:fs';
 import { lstat, open } from 'node:fs/promises';
 import { join } from 'node:path';
 
+import { isFsCode } from '../files';
 import {
   MAX_GROK_FILE_BYTES,
   readBoundedStream,
@@ -15,9 +16,6 @@ const UNVERIFIABLE = 'Grok visible policy unverifiable';
 const ETC_MANAGED = '/etc/grok/managed_config.toml';
 const ETC_REQUIREMENTS = '/etc/grok/requirements.toml';
 const MDM_DOMAIN = 'ai.x.grok';
-
-const isErrno = (error: unknown, code: string): boolean =>
-  error instanceof Error && 'code' in error && error.code === code;
 
 const remainingMs = remainingReadMs;
 const unverifiable = (): Error => new Error(UNVERIFIABLE);
@@ -59,7 +57,7 @@ const readExistingFile = async (
   try {
     link = await withReadBudget(budget, unverifiable, () => lstat(path));
   } catch (error) {
-    if (isErrno(error, 'ENOENT')) throw error;
+    if (isFsCode(error, 'ENOENT')) throw error;
     throw new Error(UNVERIFIABLE);
   }
   assertSafePolicyFile(link);
@@ -68,7 +66,7 @@ const readExistingFile = async (
     // FIFOs and other non-regular paths must not block past the helper budget.
     handle = await withReadBudget(budget, unverifiable, () => open(path, READ_FLAGS));
   } catch (error) {
-    if (isErrno(error, 'ENOENT')) throw error;
+    if (isFsCode(error, 'ENOENT')) throw error;
     throw new Error(UNVERIFIABLE);
   }
   try {
@@ -98,7 +96,7 @@ const readOptionalFile = async (
   try {
     return await readExistingFile(path, kind, budget);
   } catch (error) {
-    if (isErrno(error, 'ENOENT')) return undefined;
+    if (isFsCode(error, 'ENOENT')) return undefined;
     throw error instanceof Error && error.message === UNVERIFIABLE ? error : new Error(UNVERIFIABLE);
   }
 };

@@ -21,11 +21,12 @@ import {
   parseGrokMarker,
   parseGrokOwnership,
   peekManagedFormat,
+  tryReadLeaf,
 } from './ownership';
 import { checkGrokPolicy } from './policy';
 import { remainingReadMs, withReadBudget } from './read-bounded';
 import { equalGrokLeaf, readGrokLeaf } from './toml';
-import type { GrokDeadline, GrokDeps, GrokMarker, GrokOwnership, GrokPath, TomlEdit } from './types';
+import type { GrokDeadline, GrokDeps, GrokMarker, GrokOwnership, TomlEdit } from './types';
 
 export type GrokConfigureTestDeps = ReplaceGrokFileTestDeps & {
   readonly failpoint?: (
@@ -56,14 +57,6 @@ export const createBudget = (now: () => number): GrokDeadline => ({
 });
 
 export const configTextOrEmpty = (config: GrokFileSnapshot | undefined): string => config?.text ?? '';
-
-export const tryReadLeaf = (text: string, path: GrokPath) => {
-  try {
-    return readGrokLeaf(text, path);
-  } catch {
-    return undefined;
-  }
-};
 
 const lockUnverifiable = (): Error => new Error('Grok lock unverifiable');
 const isProcessLockWaitTimeout = (error: unknown): boolean =>
@@ -261,27 +254,11 @@ export async function clearRemovalJournal(
   });
 }
 
-export async function clearConsumedRemovalJournal(
+async function clearOwnedJournal(
   lock: ProcessFileLock,
   paths: GrokPaths,
   budget: GrokDeadline,
-): Promise<void> {
-  const existing = await readRemovalJournal(paths, budget);
-  if (existing === undefined) return;
-  try {
-    const ownership = parseGrokOwnership(existing.text);
-    if (isCompletedGrokRemoval(ownership) || isBootstrapGrokJournal(ownership)) {
-      await clearRemovalJournal(lock, paths, budget);
-    }
-  } catch {
-    // Foreign or invalid leftover journals are not taken over.
-  }
-}
-
-export async function clearOwnedRemovalJournal(
-  lock: ProcessFileLock,
-  paths: GrokPaths,
-  budget: GrokDeadline,
+  foreign: 'ignore' | 'throw',
 ): Promise<void> {
   const existing = await readRemovalJournal(paths, budget);
   if (existing === undefined) return;
@@ -294,8 +271,20 @@ export async function clearOwnedRemovalJournal(
   } catch {
     // Foreign or invalid leftover journals are not taken over.
   }
-  throw new Error('Grok removal journal already exists');
+  if (foreign === 'throw') throw new Error('Grok removal journal already exists');
 }
+
+export const clearConsumedRemovalJournal = (
+  lock: ProcessFileLock,
+  paths: GrokPaths,
+  budget: GrokDeadline,
+): Promise<void> => clearOwnedJournal(lock, paths, budget, 'ignore');
+
+export const clearOwnedRemovalJournal = (
+  lock: ProcessFileLock,
+  paths: GrokPaths,
+  budget: GrokDeadline,
+): Promise<void> => clearOwnedJournal(lock, paths, budget, 'throw');
 
 export async function restoreOwnershipFromRemovalJournal(
   lock: ProcessFileLock,

@@ -11,4 +11,5 @@ export {
   parseGrokOwnership,
   peekManagedFormat,
   recoverGrokOwnership,
+  tryReadLeaf,
 } from './ownership';

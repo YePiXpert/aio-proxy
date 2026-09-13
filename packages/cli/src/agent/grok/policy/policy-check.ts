@@ -81,15 +81,6 @@ const parseSource = (source: GrokPolicySource): unknown => {
   }
 };
 
-const ETC_MANAGED = '/etc/grok/managed_config.toml';
-
-const sourceRole = (source: Pick<GrokPolicySource, 'path' | 'role'>): GrokPolicySourceRole => {
-  if (source.role !== undefined) return source.role;
-  if (source.path === ETC_MANAGED) return 'managed';
-  if (source.path.endsWith('requirements.toml') || source.path === 'ai.x.grok') return 'requirements';
-  return 'overlay';
-};
-
 type ParsedSource = { readonly path: string; readonly value: unknown; readonly role: GrokPolicySourceRole };
 
 const valuesIn = (parsed: readonly ParsedSource[], role: GrokPolicySourceRole): unknown[] =>
@@ -264,7 +255,7 @@ export function checkGrokPolicy(
   const parsed = policy.sources.map((source) => ({
     path: source.path,
     value: parseSource(source),
-    role: sourceRole(source),
+    role: source.role ?? 'overlay',
   }));
   const layers = [
     ...valuesIn(parsed, 'managed'),

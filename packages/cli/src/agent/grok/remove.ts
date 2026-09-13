@@ -49,7 +49,14 @@ import type { GrokDeadline, GrokDeps, GrokOwnership, TomlEdit } from './types';
 
 export type { GrokRemoveFailPoint, GrokRemoveResult, GrokRemoveTestDeps };
 
-function removingOwnership(ownership: GrokOwnership): GrokOwnership {
+function removingState(
+  ownership: GrokOwnership,
+  extra: {
+    readonly revokeStatus?: AgentRevokeStatus;
+    readonly cleanupComplete?: true;
+    readonly dropPending?: true;
+  } = {},
+): GrokOwnership {
   return {
     format: 1,
     agent: 'grok',
@@ -58,35 +65,9 @@ function removingOwnership(ownership: GrokOwnership): GrokOwnership {
     status: 'removing',
     leaves: ownership.leaves,
     createdTables: ownership.createdTables,
-    ...(ownership.pending === undefined ? {} : { pending: ownership.pending }),
-  };
-}
-
-function revokedOwnership(ownership: GrokOwnership, revokeStatus: AgentRevokeStatus): GrokOwnership {
-  return {
-    format: 1,
-    agent: 'grok',
-    installationId: ownership.installationId,
-    endpoint: ownership.endpoint,
-    status: 'removing',
-    leaves: ownership.leaves,
-    createdTables: ownership.createdTables,
-    ...(ownership.pending === undefined ? {} : { pending: ownership.pending }),
-    revokeStatus,
-  };
-}
-
-function completedOwnership(ownership: GrokOwnership, revokeStatus: AgentRevokeStatus): GrokOwnership {
-  return {
-    format: 1,
-    agent: 'grok',
-    installationId: ownership.installationId,
-    endpoint: ownership.endpoint,
-    status: 'removing',
-    leaves: ownership.leaves,
-    createdTables: ownership.createdTables,
-    cleanupComplete: true,
-    revokeStatus,
+    ...(extra.dropPending === true || ownership.pending === undefined ? {} : { pending: ownership.pending }),
+    ...(extra.cleanupComplete === undefined ? {} : { cleanupComplete: true as const }),
+    ...(extra.revokeStatus === undefined ? {} : { revokeStatus: extra.revokeStatus }),
   };
 }
 
@@ -127,14 +108,14 @@ async function removeManaged(
   };
 
   if (adopted.persist) await saveOwnership(ownership);
-  if (ownership.status !== 'removing') await saveOwnership(removingOwnership(ownership));
+  if (ownership.status !== 'removing') await saveOwnership(removingState(ownership));
   await testDeps?.failpoint?.('removing');
 
   let revokeStatus: AgentRevokeStatus;
   let skippedFields: readonly string[] = [];
   if (ownership.revokeStatus === undefined) {
     revokeStatus = await deps.revoke(marker.endpoint, marker.installationId, budget);
-    await saveOwnership(revokedOwnership(ownership, revokeStatus));
+    await saveOwnership(removingState(ownership, { revokeStatus }));
     await testDeps?.failpoint?.('revoked');
   } else {
     revokeStatus = ownership.revokeStatus;
@@ -149,7 +130,7 @@ async function removeManaged(
     const edit = restoreGrokToml(config?.text ?? '', ownership.leaves, ownership.createdTables);
     skippedFields = edit.skipped;
     await commitEdit(edit);
-    await saveOwnership(completedOwnership(ownership, revokeStatus));
+    await saveOwnership(removingState(ownership, { revokeStatus, cleanupComplete: true, dropPending: true }));
     await testDeps?.failpoint?.('cleanup_complete');
   } else {
     skippedFields = skippedFieldsFromOwnership(ownership);

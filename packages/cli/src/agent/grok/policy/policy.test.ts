@@ -76,6 +76,7 @@ test('catalog aliases split across user and managed layers are a conflict', () =
       {
         path: '/etc/grok/managed_config.toml',
         kind: 'toml',
+        role: 'managed',
         text: '[endpoints]\nmodels_endpoint = "https://api.x.ai/v1/models"\n',
       },
     ],
@@ -93,6 +94,7 @@ test('a requirements pin with both catalog aliases is a conflict', () => {
       {
         path: '/etc/grok/requirements.toml',
         kind: 'toml',
+        role: 'requirements',
         text: `[endpoints]\nmodels_list_url = "${ENDPOINT}/v1/models"\nmodels_endpoint = "https://api.x.ai/v1/models"\n`,
       },
     ],
@@ -123,6 +125,7 @@ test('alias requirements pins conflict on the authored path', () => {
       {
         path: '/etc/grok/requirements.toml',
         kind: 'toml',
+        role: 'requirements',
         text: '[endpoints]\nmodels_endpoint = "https://api.x.ai/v1/models"\n',
       },
     ],
@@ -139,6 +142,7 @@ test('a matching requirements pin ignores a foreign GROK_* env', () => {
       {
         path: '/etc/grok/requirements.toml',
         kind: 'toml',
+        role: 'requirements',
         text: `[endpoints]\nmodels_base_url = "${ENDPOINT}/v1"\n`,
       },
     ],
@@ -155,6 +159,7 @@ test('a requirements pin of the auth helper command is a field conflict', () => 
       {
         path: '/etc/grok/requirements.toml',
         kind: 'toml',
+        role: 'requirements',
         text: '[auth]\nauth_provider_command = "/usr/bin/other-auth"\n',
       },
     ],
@@ -405,6 +410,7 @@ test('a non-string requirements pin is a conflict', () => {
       {
         path: '/etc/grok/requirements.toml',
         kind: 'toml',
+        role: 'requirements',
         text: 'endpoints = { models_base_url = false }\n',
       },
     ],
