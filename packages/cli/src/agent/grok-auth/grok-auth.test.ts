@@ -847,6 +847,30 @@ test('silent invalid_grant does not start device login or return the old access 
   }
 });
 
+test('a timed-out network signal becomes a typed deadline error', async () => {
+  const f = await authFixture();
+  try {
+    const timeout = AbortSignal.timeout(1);
+    await Bun.sleep(5);
+    expect(timeout.reason).toMatchObject({ name: 'TimeoutError' });
+    await expect(
+      grokAuth(f.input, {
+        ...f.deps,
+        transport: () =>
+          countingTransport(f, {
+            device: async () => {
+              f.calls.device++;
+              throw timeout.reason;
+            },
+          }),
+      }),
+    ).rejects.toMatchObject({ name: 'GrokAuthError', code: 'deadline' });
+    expect(f.stdout).toEqual([]);
+  } finally {
+    await f.cleanup();
+  }
+});
+
 test('device denial and expiry leave no token on stdout', async () => {
   const f = await authFixture();
   try {

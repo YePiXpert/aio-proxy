@@ -15,7 +15,8 @@ export class GrokAuthError extends Error {
 }
 
 const isAbortReason = (error: unknown): boolean =>
-  (error instanceof DOMException || error instanceof Error) && error.name === 'AbortError';
+  (error instanceof DOMException || error instanceof Error) &&
+  (error.name === 'AbortError' || error.name === 'TimeoutError');
 
 function isGrokInstallationStateError(error: Error): boolean {
   if (error.message.startsWith('Grok configuration modified:') || error.message.startsWith('Grok routing conflict:')) {
