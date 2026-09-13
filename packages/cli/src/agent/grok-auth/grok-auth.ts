@@ -14,6 +14,20 @@ export class GrokAuthError extends Error {
   }
 }
 
+const isAbortReason = (error: unknown): boolean =>
+  (error instanceof DOMException || error instanceof Error) && error.name === 'AbortError';
+
+function rethrowAuthFailure(error: unknown): never {
+  if (error instanceof GrokAuthError) throw error;
+  if (isAbortReason(error)) throw new GrokAuthError('deadline');
+  if (error instanceof AgentRuntimeError) {
+    if (error.code === 'invalid_grant' || error.code === 'access_denied') throw new GrokAuthError('login_required');
+    if (error.code === 'expired_token') throw new GrokAuthError('deadline');
+    throw new GrokAuthError('temporary');
+  }
+  throw error;
+}
+
 function networkBudget(budget: GrokDeadline, now: number): GrokDeadline {
   const deadline = budget.deadline - NETWORK_HEADROOM_MS;
   const remaining = deadline - now;
@@ -89,6 +103,14 @@ async function acquireGrokToken(
 }
 
 export async function grokAuth(input: GrokAuthInput, deps: GrokAuthDeps): Promise<void> {
+  try {
+    await runGrokAuth(input, deps);
+  } catch (error) {
+    rethrowAuthFailure(error);
+  }
+}
+
+async function runGrokAuth(input: GrokAuthInput, deps: GrokAuthDeps): Promise<void> {
   const started = deps.now();
   const duration = input.expired ? 5_000 : 240_000;
   const budget: GrokDeadline = { deadline: started + duration, signal: AbortSignal.timeout(duration) };

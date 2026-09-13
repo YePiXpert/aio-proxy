@@ -737,7 +737,7 @@ test('a network refresh failure keeps the refresh token and skips device login',
             },
           }),
       }),
-    ).rejects.toMatchObject({ code: 'network' });
+    ).rejects.toMatchObject({ name: 'GrokAuthError', code: 'temporary' });
     expect(f.calls.device).toBe(1);
     const after = await readCredentialFile(f.root);
     expect(after.refreshToken).toBe(before.refreshToken);
@@ -763,7 +763,7 @@ test('a delayed retry after a network refresh failure invalidates the journal', 
             },
           }),
       }),
-    ).rejects.toMatchObject({ code: 'network' });
+    ).rejects.toMatchObject({ name: 'GrokAuthError', code: 'temporary' });
     expect((await readCredentialFile(f.root)).status).toBe('refreshing');
     const later = Date.now() + 31_000;
     await expect(
@@ -799,7 +799,7 @@ test('an HTTP 500 refresh failure keeps the refresh token and skips device login
             },
           }),
       }),
-    ).rejects.toMatchObject({ code: 'invalid_response' });
+    ).rejects.toMatchObject({ name: 'GrokAuthError', code: 'temporary' });
     expect(f.calls.device).toBe(1);
     expect((await readCredentialFile(f.root)).status).toBe('refreshing');
     expect(f.stdout).toHaveLength(1);
@@ -849,7 +849,7 @@ test('device denial and expiry leave no token on stdout', async () => {
             },
           }),
       }),
-    ).rejects.toMatchObject({ code: 'access_denied' });
+    ).rejects.toMatchObject({ name: 'GrokAuthError', code: 'login_required' });
     expect(f.stdout).toEqual([]);
     expect(await Bun.file(credentialPath(f.root)).exists()).toBe(false);
     await expect(
@@ -863,7 +863,7 @@ test('device denial and expiry leave no token on stdout', async () => {
             },
           }),
       }),
-    ).rejects.toMatchObject({ code: 'expired_token' });
+    ).rejects.toMatchObject({ name: 'GrokAuthError', code: 'deadline' });
     expect(f.stdout).toEqual([]);
     expect(await Bun.file(credentialPath(f.root)).exists()).toBe(false);
   } finally {
