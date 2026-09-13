@@ -210,6 +210,19 @@ describe('passthrough usage extraction', () => {
     expect(content).toBe(1);
   });
 
+  test('counts buffered reasoning output_item.done with content text when summary is empty', () => {
+    let content = 0;
+    const observer = createPassthroughSseUsageObserver(ProviderProtocol.OpenAIResponse, {
+      onContent: () => {
+        content += 1;
+      },
+    });
+    observer.feed(
+      'event: response.output_item.done\ndata: {"type":"response.output_item.done","item":{"type":"reasoning","summary":[],"content":[{"type":"reasoning_text","text":"plan"}]}}\n\n',
+    );
+    expect(content).toBe(1);
+  });
+
   test('does not treat output_item.done as content after a Responses text delta', () => {
     let content = 0;
     const observer = createPassthroughSseUsageObserver(ProviderProtocol.OpenAIResponse, {

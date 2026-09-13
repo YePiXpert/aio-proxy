@@ -90,7 +90,9 @@ function openAIResponsesItemHasGeneratedText(item: unknown): boolean {
   if (!isPlainObject(item)) return false;
   const type = item['type'];
   if (type === 'message') return partsHaveNonEmptyText(item['content']);
-  if (type === 'reasoning') return partsHaveNonEmptyText(item['summary']);
+  if (type === 'reasoning') {
+    return partsHaveNonEmptyText(item['content']) || partsHaveNonEmptyText(item['summary']);
+  }
   return false;
 }
 

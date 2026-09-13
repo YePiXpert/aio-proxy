@@ -123,6 +123,22 @@ describe('usage capture passthrough ttft', () => {
     expect(typeof ttftMs).toBe('number');
   });
 
+  test('records ttft from a buffered reasoning output_item.done with content text and empty summary', async () => {
+    const captured = ssePassthrough(
+      'event: response.created\ndata: {"type":"response.created"}\n\n' +
+        'event: response.output_item.done\n' +
+        'data: {"type":"response.output_item.done","item":{"type":"reasoning","summary":[],"content":[{"type":"reasoning_text","text":"plan"}]}}\n\n' +
+        'event: response.completed\n' +
+        'data: {"type":"response.completed","response":{"status":"completed","usage":{"input_tokens":1,"output_tokens":1}}}\n\n',
+      ProviderProtocol.OpenAIResponse,
+    );
+    await drain(captured.value);
+    const completion = await captured.completion;
+
+    expect(completion.outcome).toBe('success');
+    expect('ttftMs' in completion ? completion.ttftMs : undefined).toEqual(expect.any(Number));
+  });
+
   test('does not invent a content gap from output_item.done after a Responses text delta', async () => {
     const observation = createAttemptResponseObservation({ startedAt: 0 });
     const captured = createUsageCapture().passthrough({
