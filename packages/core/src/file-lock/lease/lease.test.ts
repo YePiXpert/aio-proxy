@@ -91,11 +91,15 @@ test('rejects unsafe lock symlinks and hard links', async () => {
 test('ownership checks abort when the acquire signal fires', async () => {
   const root = await temporaryRoot();
   const path = join(root, '.lock');
-  const lock = await acquireProcessFileLock(path, AbortSignal.timeout(80));
+  const controller = new AbortController();
+  const lock = await acquireProcessFileLock(path, controller.signal);
   const hung = spyOn(fsPromises, 'lstat').mockImplementation(() => new Promise(() => {}));
   try {
     const started = performance.now();
-    await expect(lock.withOwnership(async () => 'ok')).rejects.toThrow();
+    const pending = lock.withOwnership(async () => 'ok');
+    await Bun.sleep(20);
+    controller.abort(new Error('acquire signal'));
+    await expect(pending).rejects.toThrow('acquire signal');
     expect(performance.now() - started).toBeLessThan(1_000);
   } finally {
     hung.mockRestore();
