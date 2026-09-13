@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import { editTomlFields, inspectTomlPaths, readTomlField } from './index';
+import { editTomlFields, hasTomlTable, inspectTomlPaths, readTomlField } from './index';
 
 test.each([
   {
@@ -233,14 +233,83 @@ test('rejects edits under arrays and array tables', () => {
   ).toThrow(/array/i);
 });
 
-test('reports non-scalar managed reads and leaves other values untouched', () => {
-  const source = 'count = 1\n[auth]\nlabel = "a"\n';
-  expect(() => readTomlField(source, ['count'], { tomlVersion: '1.0' })).toThrow(/string or boolean/i);
+test('reads integers and string arrays and rejects unsupported types', () => {
+  const source = 'count = 1\nargs = ["agent", "auth"]\nratio = 1.5\n[auth]\nlabel = "a"\n';
+  expect(readTomlField(source, ['count'], { tomlVersion: '1.0' })).toMatchObject({ present: true, value: 1 });
+  expect(readTomlField(source, ['args'], { tomlVersion: '1.0' })).toMatchObject({
+    present: true,
+    value: ['agent', 'auth'],
+  });
+  expect(() => readTomlField(source, ['ratio'], { tomlVersion: '1.0' })).toThrow(/finite integer/i);
+  expect(() =>
+    editTomlFields('count = 1\n', [{ path: ['count'], next: { present: true, value: 1.5 } }], { tomlVersion: '1.0' }),
+  ).toThrow('TOML field must be a string, boolean, finite integer, or string array');
+  expect(() =>
+    editTomlFields('count = 1\n', [{ path: ['count'], next: { present: true, value: Number.POSITIVE_INFINITY } }], {
+      tomlVersion: '1.0',
+    }),
+  ).toThrow('TOML field must be a string, boolean, finite integer, or string array');
+  expect(() =>
+    editTomlFields('count = 1\n', [{ path: ['count'], next: { present: true, value: 1e21 } }], { tomlVersion: '1.0' }),
+  ).toThrow('TOML field must be a string, boolean, finite integer, or string array');
   const result = editTomlFields(source, [{ path: ['auth', 'label'], next: { present: true, value: 'b' } }], {
     tomlVersion: '1.0',
   });
   expect(result.text).toContain('count = 1\n');
   expect(Bun.TOML.parse(result.text).count).toBe(1);
+});
+
+test('does not delete a standard table when the table path is absent', () => {
+  const source = '[model_providers.proxy]\nname = "keep"\ncustom = "user"\n';
+  const result = editTomlFields(source, [{ path: ['model_providers', 'proxy'], next: { present: false } }], {
+    tomlVersion: '1.1',
+  });
+  expect(result.text).toContain('name = "keep"');
+  expect(result.text).toContain('custom = "user"');
+});
+
+test('coalesces nested inline provider and auth edits in one patch', () => {
+  const source = 'model_providers = { "custom.proxy" = { name = "old", auth = { command = "old", user = "keep" } } }\n';
+  const result = editTomlFields(
+    source,
+    [
+      { path: ['model_providers', 'custom.proxy', 'name'], next: { present: true, value: 'AIO Proxy' } },
+      { path: ['model_providers', 'custom.proxy', 'auth', 'command'], next: { present: true, value: '/bin/aiop' } },
+    ],
+    { tomlVersion: '1.1' },
+  );
+  expect(Bun.TOML.parse(result.text).model_providers['custom.proxy']).toEqual({
+    name: 'AIO Proxy',
+    auth: { command: '/bin/aiop', user: 'keep' },
+  });
+});
+
+test('header table creation writes a nested table instead of a dotted key', () => {
+  const source = '[model_providers.proxy]\nname = "keep"\n';
+  const result = editTomlFields(
+    source,
+    [{ path: ['model_providers', 'proxy', 'auth', 'command'], next: { present: true, value: 'aiop' } }],
+    { tomlVersion: '1.1', tableCreation: 'header' },
+  );
+  expect(result.text).toContain('[model_providers.proxy.auth]');
+  expect(result.text).not.toContain('auth.command');
+  expect(result.createdTables).toEqual([['model_providers', 'proxy', 'auth']]);
+});
+
+test('prunes a parent table after its nested empty child is removed', () => {
+  const source = '[model_providers.proxy]\n[model_providers.proxy.auth]\ncommand = "old"\n';
+  const result = editTomlFields(
+    source,
+    [{ path: ['model_providers', 'proxy', 'auth', 'command'], next: { present: false } }],
+    {
+      tomlVersion: '1.1',
+      removeEmptyTables: [
+        ['model_providers', 'proxy', 'auth'],
+        ['model_providers', 'proxy'],
+      ],
+    },
+  );
+  expect(result.text).not.toContain('[model_providers');
 });
 
 test('records created standard table headers and not inline containers', () => {
@@ -285,6 +354,30 @@ test('inserts siblings into an implicit dotted-key table without a new header', 
   expect(parsed.endpoints.models_base_url).toBe('http://127.0.0.1:9/v1');
 });
 
+test('header table creation writes a new table beside an implicit dotted sibling', () => {
+  const source = 'model_providers.other.name = "keep"\n';
+  const result = editTomlFields(
+    source,
+    [
+      { path: ['model_providers', 'proxy', 'name'], next: { present: true, value: 'AIO Proxy' } },
+      { path: ['model_providers', 'proxy', 'base_url'], next: { present: true, value: 'url' } },
+    ],
+    { tomlVersion: '1.1', tableCreation: 'header' },
+  );
+  expect(result.text).toContain('model_providers.other.name = "keep"');
+  expect(result.text).toContain('[model_providers.proxy]');
+  expect(result.text).not.toContain('model_providers.proxy.name');
+  expect(result.createdTables).toEqual([['model_providers', 'proxy']]);
+  const parsed = Bun.TOML.parse(result.text) as {
+    readonly model_providers: {
+      readonly other: { readonly name: string };
+      readonly proxy: { readonly name: string; readonly base_url: string };
+    };
+  };
+  expect(parsed.model_providers.other.name).toBe('keep');
+  expect(parsed.model_providers.proxy).toEqual({ name: 'AIO Proxy', base_url: 'url' });
+});
+
 test('creates a new header beside an explicit nested sibling table', () => {
   const source = '[model_providers.other]\nname = "keep"\n';
   const result = editTomlFields(
@@ -313,4 +406,10 @@ test('collects dotted implicit parent paths without joining segments', () => {
   expect(inspected.fieldPaths).toContainEqual(['model_providers', 'proxy', 'name']);
   expect(inspected.tablePaths).toContainEqual(['model_providers']);
   expect(inspected.tablePaths).toContainEqual(['model_providers', 'proxy']);
+  expect(hasTomlTable('model_providers.proxy.name = "x"\n', ['model_providers', 'proxy'], { tomlVersion: '1.1' })).toBe(
+    false,
+  );
+  expect(
+    hasTomlTable('[model_providers.proxy]\nname = "x"\n', ['model_providers', 'proxy'], { tomlVersion: '1.1' }),
+  ).toBe(true);
 });
