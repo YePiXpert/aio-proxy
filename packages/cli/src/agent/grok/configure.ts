@@ -104,6 +104,7 @@ async function configureExisting(
   if (conflicts.length > 0) throw new Error('Grok routing conflict: ' + conflicts.join(', '));
   const versionChanged = loaded.marker.adapterVersion !== input.adapterVersion;
   if (!hasConfigChanges(edit) && !versionChanged) {
+    await clearConsumedRemovalJournal(lock, paths, budget);
     return { marker: loaded.marker, status: 'updated' };
   }
   let marker = loaded.marker;
@@ -115,6 +116,7 @@ async function configureExisting(
     await persistMarker(lock, paths, marker, loaded.markerFile, budget);
     await testDeps?.failpoint?.('marker_version');
   }
+  await clearConsumedRemovalJournal(lock, paths, budget);
   return { marker, status: 'updated' };
 }
 

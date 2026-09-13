@@ -1400,6 +1400,41 @@ test('final cleanup retains a replaced leftover credential', async () => {
   }
 });
 
+test('configure retry after a retained rebind crash clears the consumed removal journal', async () => {
+  const f = await grokFixture();
+  try {
+    await configureGrok(f.input, f.deps);
+    const notes = join(f.root, 'aio-proxy', 'notes.txt');
+    await removeGrokForTest(f.root, f.input.adapterVersion, f.deps, {
+      failpoint: async (point) => {
+        if (point === 'ownership_removed') await writeFile(notes, 'keep me\n', { mode: 0o600 });
+      },
+    });
+    expect(await Bun.file(join(f.root, '.aio-proxy-removal.json')).exists()).toBe(true);
+    const reboundId = '22222222-2222-4222-8222-222222222222';
+    await expect(
+      configureGrokForTest(
+        f.input,
+        { ...f.deps, randomUUID: () => reboundId },
+        {
+          failpoint: (point) => {
+            if (point === 'ownership_committed') throw new Error('crash after rebind commit');
+          },
+        },
+      ),
+    ).rejects.toThrow(/crash after rebind commit/);
+    expect(await Bun.file(join(f.root, '.aio-proxy-removal.json')).exists()).toBe(true);
+    const again = await configureGrok(f.input, f.deps);
+    expect(again.status).toBe('updated');
+    expect(again.marker.installationId).toBe(reboundId);
+    expect(await Bun.file(join(f.root, '.aio-proxy-removal.json')).exists()).toBe(false);
+    const removed = await removeGrok(f.root, f.input.adapterVersion, f.deps);
+    expect(removed.retainedFiles).toEqual(['notes.txt']);
+  } finally {
+    await f.cleanup();
+  }
+});
+
 test('unknown private files are retained and owned tmp is removed', async () => {
   const f = await grokFixture();
   try {
