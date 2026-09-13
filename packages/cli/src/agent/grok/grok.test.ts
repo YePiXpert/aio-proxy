@@ -406,6 +406,25 @@ test('withGrokLock does not hang when lock release stalls', async () => {
   }
 });
 
+test('readGrokObservation retries when the lock vanishes during observation', async () => {
+  let attempts = 0;
+  const observe = spyOn(core, 'observeProcessFileLock').mockImplementation(async () => {
+    attempts += 1;
+    if (attempts === 1) {
+      throw Object.assign(new Error('ENOENT: no such file or directory'), { code: 'ENOENT' });
+    }
+    return { owner: 'next-owner' };
+  });
+  try {
+    await expect(
+      readGrokObservation('/tmp/grok-observe-release', '11111111-1111-4111-8111-111111111111', budget()),
+    ).resolves.toEqual({ lockOwner: 'next-owner' });
+    expect(attempts).toBe(2);
+  } finally {
+    observe.mockRestore();
+  }
+});
+
 test('readGrokObservation rejects when lock observation outlives the budget', async () => {
   const observe = spyOn(core, 'observeProcessFileLock').mockImplementation(() => new Promise(() => {}));
   try {

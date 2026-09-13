@@ -11,6 +11,7 @@ import {
   assertSafeRoot,
   grokPaths,
   inspectPath,
+  isFsCode,
   isRecoverableBootstrapPrivateDir,
   readGrokCredentialText,
   readGrokFile,
@@ -75,8 +76,14 @@ async function shouldRetryIncompleteLock(path: string, budget: GrokDeadline): Pr
 async function observeGrokLockOwner(root: string, budget: GrokDeadline): Promise<string | undefined> {
   const path = join(root, '.aio-proxy.lock');
   while (!budget.signal.aborted) {
-    const observed = await withReadBudget(budget, lockUnverifiable, () => observeProcessFileLock(path));
-    if (observed !== undefined) return observed.owner;
+    try {
+      const observed = await withReadBudget(budget, lockUnverifiable, () => observeProcessFileLock(path));
+      if (observed !== undefined) return observed.owner;
+    } catch (error) {
+      if (!isFsCode(error, 'ENOENT')) throw error;
+      await delayWithinBudget(budget, 25);
+      continue;
+    }
     if (!(await shouldRetryIncompleteLock(path, budget))) return undefined;
     await delayWithinBudget(budget, 25);
   }
