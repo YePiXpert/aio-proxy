@@ -151,6 +151,40 @@ const addNewTableField = (
   return true;
 };
 
+const planImplicitInsert = (
+  source: string,
+  document: InspectedDocument,
+  edit: EncodedFieldEdit & { readonly next: { readonly present: true; readonly encoded: string } },
+  tableCreation: TomlTableCreation,
+  newTables: Map<string, NewTable>,
+  implicitFields: Map<string, { after: number; fields: string[] }>,
+  addCreatedTable: (path: readonly string[]) => void,
+): boolean => {
+  const implicit = lastImplicitSibling(source, document, edit.path);
+  if (implicit === undefined) return false;
+  const parentPath = edit.path.slice(0, -1);
+  if (
+    tableCreation === 'header' &&
+    parentPath.length > implicit.prefix.length &&
+    isPrefix(implicit.prefix, parentPath)
+  ) {
+    if (addNewTableField(newTables, parentPath, `${encodeTomlKey(edit.path.at(-1)!)} = ${edit.next.encoded}`)) {
+      addCreatedTable(parentPath);
+    }
+    return true;
+  }
+  const key = JSON.stringify(implicit.prefix);
+  const assignment = fieldAssignment(edit.path, edit.next.encoded);
+  const existingImplicit = implicitFields.get(key);
+  if (existingImplicit !== undefined) {
+    existingImplicit.fields.push(assignment);
+    if (implicit.after > existingImplicit.after) existingImplicit.after = implicit.after;
+  } else {
+    implicitFields.set(key, { after: implicit.after, fields: [assignment] });
+  }
+  return true;
+};
+
 const inlinePlanOperations = (source: string, container: AST.TOMLInlineTable, plan: InlinePlan): InlineOperation[] => {
   const deletes = [...new Set(plan.deletes)];
   const remaining = container.body.filter((member) => !deletes.includes(member));
@@ -274,17 +308,17 @@ export const planTomlEdits = (
       }
     }
     if (located) continue;
-    const implicit = lastImplicitSibling(source, document, edit.path);
-    if (implicit !== undefined) {
-      const key = JSON.stringify(implicit.prefix);
-      const assignment = fieldAssignment(edit.path, edit.next.encoded);
-      const existingImplicit = implicitFields.get(key);
-      if (existingImplicit !== undefined) {
-        existingImplicit.fields.push(assignment);
-        if (implicit.after > existingImplicit.after) existingImplicit.after = implicit.after;
-      } else {
-        implicitFields.set(key, { after: implicit.after, fields: [assignment] });
-      }
+    if (
+      planImplicitInsert(
+        source,
+        document,
+        { path: edit.path, next: edit.next },
+        tableCreation,
+        newTables,
+        implicitFields,
+        addCreatedTable,
+      )
+    ) {
       continue;
     }
     if (edit.path.length === 1) {

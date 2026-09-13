@@ -71,6 +71,24 @@ test('adds missing fields to an existing inline provider in source order', () =>
   );
 });
 
+test('creates a header provider table beside an implicit dotted sibling', () => {
+  const original = 'model_providers.other.name = "keep"\n';
+  const actual = editCodexDocument(original, codexProviderEdits('proxy.team', 'url', keep('token')));
+  expect(actual).toContain('model_providers.other.name = "keep"');
+  expect(actual).toContain('[model_providers."proxy.team"]');
+  expect(actual).not.toContain('model_providers.proxy.team.name');
+  expect(Bun.TOML.parse(actual).model_providers).toEqual({
+    other: { name: 'keep' },
+    'proxy.team': {
+      name: 'AIO Proxy',
+      base_url: 'url',
+      wire_api: 'responses',
+      requires_openai_auth: true,
+      experimental_bearer_token: 'token',
+    },
+  });
+});
+
 test('creates a valid document from an empty source', () => {
   const actual = editCodexDocument('', codexProviderEdits('proxy.team', 'url', keep('token')));
   expect(Bun.TOML.parse(actual).model_provider).toBe('proxy.team');
