@@ -4,6 +4,8 @@ import { chmod, link, mkdir, readFile, rm, stat, symlink, unlink, writeFile } fr
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
+import * as core from '@aio-proxy/core';
+
 import * as grokFiles from './files';
 import {
   configureGrok,
@@ -159,6 +161,98 @@ test('a crash after the marker rename keeps the pending journal', async () => {
     expect((await inspectGrok(f.root, f.input.adapterVersion)).configuration).toBe('current');
   } finally {
     await f.cleanup();
+  }
+});
+
+test('expired marker verification after rename keeps the pending journal', async () => {
+  const f = await grokFixture();
+  const controller = new AbortController();
+  const create = spyOn(grokLifecycle, 'createBudget').mockImplementation((now) => ({
+    deadline: now() + 15_000,
+    signal: controller.signal,
+  }));
+  try {
+    await expect(
+      configureGrokForTest(f.input, f.deps, {
+        failpoint: (point) => {
+          if (point === 'marker_committed') controller.abort();
+        },
+      }),
+    ).rejects.toThrow(/unverifiable|aborted/i);
+    const ownershipPath = join(f.root, 'aio-proxy', 'ownership.json');
+    expect(await Bun.file(ownershipPath).exists()).toBe(true);
+    expect(await Bun.file(join(f.root, 'aio-proxy', '.aio-proxy-managed.json')).exists()).toBe(true);
+    expect(await readFile(ownershipPath, 'utf8')).toContain('"pending"');
+  } finally {
+    create.mockRestore();
+    await f.cleanup();
+  }
+});
+
+test('an unverifiable marker probe after rename keeps the pending journal', async () => {
+  const f = await grokFixture();
+  const realInspect = grokFiles.inspectPath;
+  const marker = join(f.root, 'aio-proxy', '.aio-proxy-managed.json');
+  const inspect = spyOn(grokFiles, 'inspectPath').mockImplementation(async (path, budget) => {
+    if (path === marker && (await Bun.file(marker).exists())) throw new Error('Grok path unverifiable');
+    return realInspect(path, budget);
+  });
+  try {
+    await expect(
+      configureGrokForTest(f.input, f.deps, {
+        failpoint: (point) => {
+          if (point === 'marker_committed') throw new Error('crash after marker rename');
+        },
+      }),
+    ).rejects.toThrow(/crash after marker rename/);
+    expect(await Bun.file(join(f.root, 'aio-proxy', 'ownership.json')).exists()).toBe(true);
+    expect(await Bun.file(marker).exists()).toBe(true);
+  } finally {
+    inspect.mockRestore();
+    await f.cleanup();
+  }
+});
+
+test('withGrokLock rejects when lock acquisition outlives the budget', async () => {
+  const acquire = spyOn(core, 'acquireProcessFileLock').mockImplementation(() => new Promise(() => {}));
+  try {
+    const started = performance.now();
+    const short = { deadline: Date.now() + 80, signal: AbortSignal.timeout(80) };
+    await expect(grokLifecycle.withGrokLock('/tmp/grok-lock-budget', short, async () => 'ok')).rejects.toThrow(
+      /unverifiable/i,
+    );
+    expect(performance.now() - started).toBeLessThan(1_000);
+  } finally {
+    acquire.mockRestore();
+  }
+});
+
+test('withGrokLock releases a lock that arrives after the budget expires', async () => {
+  let released = false;
+  let finish: ((lock: Awaited<ReturnType<typeof core.acquireProcessFileLock>>) => void) | undefined;
+  const acquire = spyOn(core, 'acquireProcessFileLock').mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  try {
+    const short = { deadline: Date.now() + 80, signal: AbortSignal.timeout(80) };
+    await expect(grokLifecycle.withGrokLock('/tmp/grok-lock-late', short, async () => 'ok')).rejects.toThrow(
+      /unverifiable/i,
+    );
+    finish?.({
+      owner: 'late',
+      withOwnership: async (action) => action(async () => {}),
+      withOwnershipFence: async (action) => action(async () => {}),
+      release: async () => {
+        released = true;
+      },
+    });
+    await Bun.sleep(20);
+    expect(released).toBe(true);
+  } finally {
+    acquire.mockRestore();
   }
 });
 

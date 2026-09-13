@@ -22,6 +22,7 @@ import {
   peekManagedFormat,
 } from './ownership';
 import { checkGrokPolicy } from './policy';
+import { withReadBudget } from './read-bounded';
 import { equalGrokLeaf, readGrokLeaf } from './toml';
 import type { GrokDeadline, GrokDeps, GrokMarker, GrokOwnership, GrokPath, TomlEdit } from './types';
 
@@ -68,7 +69,22 @@ export async function withGrokLock<T>(
   budget: GrokDeadline,
   action: (lock: ProcessFileLock) => Promise<T>,
 ): Promise<T> {
-  const lock = await acquireProcessFileLock(join(root, '.aio-proxy.lock'), budget.signal);
+  const path = join(root, '.aio-proxy.lock');
+  let acquiring: Promise<ProcessFileLock> | undefined;
+  let lock: ProcessFileLock;
+  try {
+    lock = await withReadBudget(
+      budget,
+      () => new Error('Grok lock unverifiable'),
+      (signal) => {
+        acquiring = acquireProcessFileLock(path, signal);
+        return acquiring;
+      },
+    );
+  } catch (error) {
+    void acquiring?.then((acquired) => acquired.release()).catch(() => undefined);
+    throw error;
+  }
   try {
     return await action(lock);
   } finally {

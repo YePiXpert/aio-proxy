@@ -219,9 +219,11 @@ async function configureFirst(
   } catch (error) {
     if (!markerWritten) {
       try {
-        if ((await inspectPath(paths.marker, budget)) !== undefined) markerWritten = true;
+        if ((await inspectPath(paths.marker, cleanupBudget())) !== undefined) markerWritten = true;
       } catch {
-        // A hung or unverifiable marker probe must not replace the original failure.
+        // Absence is the only safe rollback signal. An expired or hung probe
+        // must keep the journal — the marker may already be on disk.
+        markerWritten = true;
       }
     }
     if (!markerWritten && reuse === undefined) {
