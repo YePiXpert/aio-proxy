@@ -48,6 +48,19 @@ describe('cli rendering', () => {
     }
   });
 
+  test('top-level rendering surfaces Grok configuration-modified fields', async () => {
+    const originalLocale = getLocale();
+    await setLocale('en');
+    try {
+      const formatted = formatCliError(new Error('Grok configuration modified: models.default'), 'en');
+
+      expect(formatted.message).toBe('Grok configuration has been modified: models.default.');
+      expect(formatted.message).not.toBe('Unexpected internal error');
+    } finally {
+      await setLocale(originalLocale);
+    }
+  });
+
   test('top-level rendering rejects forged mutable core provider errors', () => {
     const forged = new ProviderAccountAlreadyExistsError('existing');
     Object.defineProperties(forged, {

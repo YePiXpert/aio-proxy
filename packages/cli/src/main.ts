@@ -330,6 +330,8 @@ export function formatCliError(err: unknown, locale: Parameters<typeof formatUse
   if (err instanceof Error) {
     const conflict = /^Grok routing conflict: (.+)$/u.exec(err.message);
     if (conflict?.[1] !== undefined) return { message: m['cli.agent.grok_policy_conflict']({ fields: conflict[1] }) };
+    const modified = /^Grok configuration modified: (.+)$/u.exec(err.message);
+    if (modified?.[1] !== undefined) return { message: m['cli.agent.configuration_modified']({ fields: modified[1] }) };
   }
   if (err instanceof CommanderError || isKnownCliUserError(err)) {
     return { message: err.message };
