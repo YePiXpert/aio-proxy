@@ -5,26 +5,14 @@ import {
   encodeTomlKey,
   inlineMemberDeletes,
   isPrefix,
-  keyParts,
   lineEndingFor,
   lineStart,
-  samePath,
   textAfterLine,
   type InlineOperation,
   type SourceEdit,
 } from './ast-edits';
+import { findInlineContainer, findTable, findValue, hasArrayTableAncestor, type InspectedDocument } from './inspect';
 
-export type Container = AST.TOMLTopLevelTable | AST.TOMLTable | AST.TOMLInlineTable;
-export type LocatedValue = {
-  readonly keyValue: AST.TOMLKeyValue;
-  readonly path: readonly string[];
-  readonly container: Container;
-};
-export type InspectedDocument = {
-  readonly values: readonly LocatedValue[];
-  readonly tables: readonly AST.TOMLTable[];
-  readonly topLevel: AST.TOMLTopLevelTable;
-};
 export type EncodedFieldEdit = {
   readonly path: readonly string[];
   readonly next: { readonly present: false } | { readonly present: true; readonly encoded: string };
@@ -33,93 +21,7 @@ export type PlannedTomlEdits = {
   readonly sourceEdits: readonly SourceEdit[];
   readonly createdTables: readonly (readonly string[])[];
 };
-
-const tablePath = (table: AST.TOMLTable): string[] => table.resolvedKey.map(String);
-
-const arrayTableNames = (table: AST.TOMLTable): string[] =>
-  table.resolvedKey.filter((part): part is string => typeof part === 'string');
-
-export const walkKeyValues = (
-  values: readonly AST.TOMLKeyValue[],
-  prefix: readonly string[],
-  container: Container,
-  output: LocatedValue[],
-): void => {
-  for (const keyValue of values) {
-    const path = [...prefix, ...keyParts(keyValue.key)];
-    output.push({ keyValue, path, container });
-    if (keyValue.value.type === 'TOMLInlineTable') walkKeyValues(keyValue.value.body, path, keyValue.value, output);
-  }
-};
-
-export const inspectDocument = (ast: AST.TOMLProgram): InspectedDocument => {
-  const topLevel = ast.body[0]!;
-  const values: LocatedValue[] = [];
-  const tables = topLevel.body.filter((entry): entry is AST.TOMLTable => entry.type === 'TOMLTable');
-  walkKeyValues(
-    topLevel.body.filter((entry): entry is AST.TOMLKeyValue => entry.type === 'TOMLKeyValue'),
-    [],
-    topLevel,
-    values,
-  );
-  for (const table of tables) walkKeyValues(table.body, tablePath(table), table, values);
-  return { values, tables, topLevel };
-};
-
-export const findValue = (document: InspectedDocument, path: readonly string[]): LocatedValue | undefined =>
-  document.values.find((value) => samePath(value.path, path));
-
-export const findTable = (document: InspectedDocument, path: readonly string[]): AST.TOMLTable | undefined =>
-  document.tables.find((table) => samePath(tablePath(table), path));
-
-export const findInlineContainer = (
-  document: InspectedDocument,
-  path: readonly string[],
-): AST.TOMLInlineTable | undefined => {
-  const value = findValue(document, path);
-  return value?.keyValue.value.type === 'TOMLInlineTable' ? value.keyValue.value : undefined;
-};
-
-export const collectPaths = (
-  document: InspectedDocument,
-): { readonly fieldPaths: readonly (readonly string[])[]; readonly tablePaths: readonly (readonly string[])[] } => {
-  const fieldKeys = new Set<string>();
-  const tableKeys = new Set<string>();
-  const fieldPaths: string[][] = [];
-  const tablePaths: string[][] = [];
-  const addTable = (path: readonly string[]): void => {
-    if (path.length === 0) return;
-    const key = JSON.stringify(path);
-    if (tableKeys.has(key)) return;
-    tableKeys.add(key);
-    tablePaths.push([...path]);
-  };
-  const addImplicitParents = (path: readonly string[]): void => {
-    for (let index = 1; index < path.length; index += 1) addTable(path.slice(0, index));
-  };
-  for (const value of document.values) {
-    const key = JSON.stringify(value.path);
-    if (!fieldKeys.has(key)) {
-      fieldKeys.add(key);
-      fieldPaths.push([...value.path]);
-    }
-    addImplicitParents(value.path);
-    if (value.keyValue.value.type === 'TOMLInlineTable') addTable(value.path);
-  }
-  for (const table of document.tables) {
-    const path = tablePath(table);
-    addTable(path);
-    addImplicitParents(path);
-  }
-  return { fieldPaths, tablePaths };
-};
-
-export const hasArrayTableAncestor = (document: InspectedDocument, path: readonly string[]): boolean =>
-  document.tables.some((table) => {
-    if (table.kind !== 'array') return false;
-    const names = arrayTableNames(table);
-    return names.length > 0 && isPrefix(names, path);
-  });
+export type TomlTableCreation = 'dotted' | 'header';
 
 const sourceInsertionPrefix = (source: string, position: number, ending: string): string =>
   position > 0 && source[position - 1] !== '\n' ? ending : '';
@@ -130,7 +32,7 @@ const trailingLineComment = (afterValue: string): string | undefined => {
   return `${comment[1]}${comment[2] ?? ''}`;
 };
 
-const lineDelete = (source: string, range: readonly [number, number]): SourceEdit => {
+export const lineDelete = (source: string, range: readonly [number, number]): SourceEdit => {
   const start = lineStart(source, range[0]);
   const end = textAfterLine(source, range[1]);
   return { start, end, text: trailingLineComment(source.slice(range[1], end)) ?? '' };
@@ -203,6 +105,12 @@ type InlinePlan = {
   readonly inserts: { remaining: readonly string[]; encoded: string }[];
 };
 
+type NewTable = {
+  readonly path: readonly string[];
+  readonly fields: string[];
+  readonly afterTable?: AST.TOMLTable;
+};
+
 const getInlinePlan = (plans: Map<AST.TOMLInlineTable, InlinePlan>, container: AST.TOMLInlineTable): InlinePlan => {
   const existing = plans.get(container);
   if (existing !== undefined) return existing;
@@ -227,10 +135,65 @@ const assertInsertable = (document: InspectedDocument, path: readonly string[]):
   }
 };
 
+const addNewTableField = (
+  newTables: Map<string, NewTable>,
+  path: readonly string[],
+  assignment: string,
+  afterTable?: AST.TOMLTable,
+): boolean => {
+  const key = JSON.stringify(path);
+  const existing = newTables.get(key);
+  if (existing !== undefined) {
+    existing.fields.push(assignment);
+    return false;
+  }
+  newTables.set(key, { path, fields: [assignment], ...(afterTable === undefined ? {} : { afterTable }) });
+  return true;
+};
+
+const inlinePlanOperations = (source: string, container: AST.TOMLInlineTable, plan: InlinePlan): InlineOperation[] => {
+  const deletes = [...new Set(plan.deletes)];
+  const remaining = container.body.filter((member) => !deletes.includes(member));
+  const operations: InlineOperation[] = [...inlineMemberDeletes(source, container.body, deletes), ...plan.replaces];
+  const insertText = groupedInlineInserts(plan.inserts);
+  if (insertText.length > 0) {
+    operations.push({
+      kind: 'insert',
+      start: remaining.at(-1)?.range[1] ?? container.range[1] - 1,
+      text: `${remaining.length > 0 ? ', ' : ''}${insertText.join(', ')}`,
+    });
+  }
+  return operations;
+};
+
+const coalesceInlineOperations = (
+  plans: Map<AST.TOMLInlineTable, InlineOperation[]>,
+): Map<AST.TOMLInlineTable, InlineOperation[]> => {
+  const coalesced = new Map<AST.TOMLInlineTable, InlineOperation[]>();
+  for (const [container, operations] of plans) {
+    let scope = container;
+    for (const candidate of plans.keys()) {
+      if (
+        candidate !== container &&
+        candidate.range[0] <= scope.range[0] &&
+        candidate.range[1] >= scope.range[1] &&
+        candidate.range[1] - candidate.range[0] > scope.range[1] - scope.range[0]
+      ) {
+        scope = candidate;
+      }
+    }
+    const scoped = coalesced.get(scope) ?? [];
+    scoped.push(...operations);
+    coalesced.set(scope, scoped);
+  }
+  return coalesced;
+};
+
 export const planTomlEdits = (
   source: string,
   document: InspectedDocument,
   edits: readonly EncodedFieldEdit[],
+  tableCreation: TomlTableCreation = 'dotted',
 ): PlannedTomlEdits => {
   const sourceEdits: SourceEdit[] = [];
   const createdTables: Array<readonly string[]> = [];
@@ -238,7 +201,7 @@ export const planTomlEdits = (
   const inlinePlans = new Map<AST.TOMLInlineTable, InlinePlan>();
   const tableFields = new Map<AST.TOMLTable, string[]>();
   const topLevelFields: string[] = [];
-  const newTables = new Map<string, { path: readonly string[]; fields: string[] }>();
+  const newTables = new Map<string, NewTable>();
   const implicitFields = new Map<string, { after: number; fields: string[] }>();
   const ending = lineEndingFor(source);
 
@@ -276,13 +239,7 @@ export const planTomlEdits = (
       }
       continue;
     }
-    if (!edit.next.present) {
-      const table = findTable(document, edit.path);
-      if (table !== undefined && table.kind === 'standard') {
-        sourceEdits.push(lineDelete(source, [table.range[0], table.body.at(-1)?.range[1] ?? table.range[1]]));
-      }
-      continue;
-    }
+    if (!edit.next.present) continue;
     assertInsertable(document, edit.path);
     let located = false;
     for (let index = edit.path.length - 1; index >= 1; index -= 1) {
@@ -299,9 +256,19 @@ export const planTomlEdits = (
       const table = findTable(document, prefix);
       if (table !== undefined) {
         if (table.kind === 'array') throw new Error('Cannot edit a field under a TOML array table');
-        const fields = tableFields.get(table) ?? [];
-        fields.push(fieldAssignment(edit.path.slice(index), edit.next.encoded));
-        tableFields.set(table, fields);
+        const remaining = edit.path.slice(index);
+        if (tableCreation === 'header' && remaining.length > 1) {
+          const nestedPath = edit.path.slice(0, -1);
+          if (
+            addNewTableField(newTables, nestedPath, `${encodeTomlKey(edit.path.at(-1)!)} = ${edit.next.encoded}`, table)
+          ) {
+            addCreatedTable(nestedPath);
+          }
+        } else {
+          const fields = tableFields.get(table) ?? [];
+          fields.push(fieldAssignment(remaining, edit.next.encoded));
+          tableFields.set(table, fields);
+        }
         located = true;
         break;
       }
@@ -311,10 +278,10 @@ export const planTomlEdits = (
     if (implicit !== undefined) {
       const key = JSON.stringify(implicit.prefix);
       const assignment = fieldAssignment(edit.path, edit.next.encoded);
-      const existing = implicitFields.get(key);
-      if (existing !== undefined) {
-        existing.fields.push(assignment);
-        if (implicit.after > existing.after) existing.after = implicit.after;
+      const existingImplicit = implicitFields.get(key);
+      if (existingImplicit !== undefined) {
+        existingImplicit.fields.push(assignment);
+        if (implicit.after > existingImplicit.after) existingImplicit.after = implicit.after;
       } else {
         implicitFields.set(key, { after: implicit.after, fields: [assignment] });
       }
@@ -325,13 +292,7 @@ export const planTomlEdits = (
       continue;
     }
     const parentPath = edit.path.slice(0, -1);
-    const key = JSON.stringify(parentPath);
-    const existingNew = newTables.get(key);
-    const assignment = `${encodeTomlKey(edit.path.at(-1)!)} = ${edit.next.encoded}`;
-    if (existingNew !== undefined) {
-      existingNew.fields.push(assignment);
-    } else {
-      newTables.set(key, { path: parentPath, fields: [assignment] });
+    if (addNewTableField(newTables, parentPath, `${encodeTomlKey(edit.path.at(-1)!)} = ${edit.next.encoded}`)) {
       addCreatedTable(parentPath);
     }
   }
@@ -359,26 +320,25 @@ export const planTomlEdits = (
       text: `${sourceInsertionPrefix(source, after, ending)}${fields.join(ending)}${ending}`,
     });
   }
-  for (const { path, fields } of newTables.values()) {
-    const prefix = source.length > 0 && !source.endsWith('\n') ? ending : '';
-    sourceEdits.push({
-      start: source.length,
-      end: source.length,
-      text: `${prefix}[${encodeDottedKey(path)}]${ending}${fields.join(ending)}${ending}`,
-    });
-  }
-  for (const [container, plan] of inlinePlans) {
-    const deletes = [...new Set(plan.deletes)];
-    const remaining = container.body.filter((member) => !deletes.includes(member));
-    const operations: InlineOperation[] = [...inlineMemberDeletes(source, container.body, deletes), ...plan.replaces];
-    const insertText = groupedInlineInserts(plan.inserts);
-    if (insertText.length > 0) {
-      operations.push({
-        kind: 'insert',
-        start: remaining.at(-1)?.range[1] ?? container.range[1] - 1,
-        text: `${remaining.length > 0 ? ', ' : ''}${insertText.join(', ')}`,
+  for (const { path, fields, afterTable } of newTables.values()) {
+    const block = `[${encodeDottedKey(path)}]${ending}${fields.join(ending)}${ending}`;
+    if (afterTable !== undefined) {
+      const start = tableInsertionPoint(source, afterTable, document.tables);
+      sourceEdits.push({
+        start,
+        end: start,
+        text: `${sourceInsertionPrefix(source, start, ending)}${block}`,
       });
+      continue;
     }
+    const prefix = source.length > 0 && !source.endsWith('\n') ? ending : '';
+    sourceEdits.push({ start: source.length, end: source.length, text: `${prefix}${block}` });
+  }
+  const operationsByContainer = new Map<AST.TOMLInlineTable, InlineOperation[]>();
+  for (const [container, plan] of inlinePlans) {
+    operationsByContainer.set(container, inlinePlanOperations(source, container, plan));
+  }
+  for (const [container, operations] of coalesceInlineOperations(operationsByContainer)) {
     sourceEdits.push(applyInlineOperations(source, container.range, operations));
   }
   return { sourceEdits, createdTables };
@@ -386,12 +346,3 @@ export const planTomlEdits = (
 
 export const emptyTableHeaderEdit = (source: string, table: AST.TOMLTable): SourceEdit =>
   lineDelete(source, [table.range[0], table.body.at(-1)?.range[1] ?? table.range[1]]);
-
-export const tableIsEmpty = (document: InspectedDocument, table: AST.TOMLTable): boolean => {
-  if (table.body.length > 0) return false;
-  const path = tablePath(table);
-  return !document.tables.some((candidate) => {
-    if (candidate === table) return false;
-    return isPrefix(path, tablePath(candidate));
-  });
-};

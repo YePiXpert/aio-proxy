@@ -4,7 +4,7 @@ import type { FieldChange, GrokPath, LeafValue, OwnedLeaf, TomlEdit } from '../t
 export type { FieldChange, GrokPath, LeafValue, OwnedLeaf, TomlEdit } from '../types';
 
 const SYNTAX = { tomlVersion: '1.0' as const };
-const SCALAR_TYPE_ERROR = 'TOML field must be a string or boolean';
+const SCALAR_TYPE_ERROR = 'TOML field must be a string, boolean, finite integer, or string array';
 const AUTH_TABLE = ['auth'] as const;
 const GROK_COM_TABLE = ['grok_com_config'] as const;
 

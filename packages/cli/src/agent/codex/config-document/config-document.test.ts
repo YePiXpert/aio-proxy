@@ -175,6 +175,24 @@ test('deletes standard provider scalar fields while preserving unrelated fields 
   }
 });
 
+test('keeps an existing auth table after clearing its managed fields', () => {
+  const original = '[model_providers.proxy]\nname = "AIO Proxy"\n[model_providers.proxy.auth]\ncommand = "aiop"\n';
+  const actual = editCodexDocument(original, [
+    { path: ['model_providers', 'proxy', 'auth', 'command'], next: { present: false } },
+  ]);
+  expect(actual).toContain('[model_providers.proxy.auth]');
+  expect(actual).not.toContain('command =');
+});
+
+test('removes an empty auth table only when the table path is deleted', () => {
+  const original = '[model_providers.proxy]\nname = "AIO Proxy"\n[model_providers.proxy.auth]\n';
+  const actual = editCodexDocument(original, [
+    { path: ['model_providers', 'proxy', 'auth'], next: { present: false } },
+  ]);
+  expect(actual).toContain('[model_providers.proxy]');
+  expect(actual).not.toContain('[model_providers.proxy.auth]');
+});
+
 test('removes an explicitly managed provider table after deleting all managed fields', () => {
   const original =
     '# before\n[model_providers.proxy]\n' +

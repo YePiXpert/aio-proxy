@@ -1,19 +1,11 @@
 import { parseTOML, type AST } from 'toml-eslint-parser';
 
-import { applySourceEdits, encodeTomlValue, samePath } from './ast-edits';
-import {
-  collectPaths,
-  emptyTableHeaderEdit,
-  findTable,
-  findValue,
-  inspectDocument,
-  planTomlEdits,
-  tableIsEmpty,
-  type EncodedFieldEdit,
-} from './path-edits';
+import { applySourceEdits, encodeTomlValue, samePath, type TomlLeaf } from './ast-edits';
+import { collectPaths, findInlineContainer, findTable, findValue, inspectDocument, tableIsEmpty } from './inspect';
+import { emptyTableHeaderEdit, planTomlEdits, type EncodedFieldEdit } from './path-edits';
 
 export type TomlPath = readonly string[];
-export type TomlScalar = string | boolean;
+export type TomlScalar = TomlLeaf;
 export type TomlSyntax = { readonly tomlVersion: '1.0' | '1.1' };
 export type TomlSlot =
   | { readonly present: false }
@@ -24,10 +16,13 @@ export type TomlFieldEdit = {
     | { readonly present: false }
     | { readonly present: true; readonly value: TomlScalar; readonly raw?: string };
 };
-export type TomlEditOptions = TomlSyntax & { readonly removeEmptyTables?: readonly TomlPath[] };
+export type TomlEditOptions = TomlSyntax & {
+  readonly removeEmptyTables?: readonly TomlPath[];
+  readonly tableCreation?: 'dotted' | 'header';
+};
 export type TomlEditResult = { readonly text: string; readonly createdTables: readonly TomlPath[] };
 
-const SCALAR_TYPE_ERROR = 'TOML field must be a string or boolean';
+const SCALAR_TYPE_ERROR = 'TOML field must be a string, boolean, finite integer, or string array';
 const INVALID_DOCUMENT = 'Invalid TOML document';
 const INVALID_EDITED_DOCUMENT = 'Edited TOML document is invalid';
 const INVALID_VALUE_LITERAL = 'Invalid TOML value literal';
@@ -49,8 +44,30 @@ function validateFinalDocument(text: string, syntax: TomlSyntax): void {
   }
 }
 
-const scalarFromNode = (node: AST.TOMLValue): TomlScalar | undefined => {
+const sameScalar = (left: TomlScalar, right: TomlScalar): boolean => {
+  if (Array.isArray(left) || Array.isArray(right)) {
+    return (
+      Array.isArray(left) &&
+      Array.isArray(right) &&
+      left.length === right.length &&
+      left.every((item, index) => item === right[index])
+    );
+  }
+  return left === right;
+};
+
+const scalarFromNode = (node: AST.TOMLContentNode): TomlScalar | undefined => {
+  if (node.type === 'TOMLArray') {
+    const values: string[] = [];
+    for (const element of node.elements) {
+      if (element.type !== 'TOMLValue' || element.kind !== 'string') return undefined;
+      values.push(element.value);
+    }
+    return values;
+  }
+  if (node.type !== 'TOMLValue') return undefined;
   if (node.kind === 'string' || node.kind === 'boolean') return node.value;
+  if (node.kind === 'integer' && Number.isFinite(node.value)) return node.value;
   return undefined;
 };
 
@@ -58,7 +75,6 @@ export function readTomlField(text: string, path: TomlPath, syntax: TomlSyntax):
   const document = inspectDocument(parseDocument(text, syntax));
   const value = findValue(document, path);
   if (value === undefined) return { present: false };
-  if (value.keyValue.value.type !== 'TOMLValue') throw new Error(SCALAR_TYPE_ERROR);
   const scalar = scalarFromNode(value.keyValue.value);
   if (scalar === undefined) throw new Error(SCALAR_TYPE_ERROR);
   return {
@@ -66,6 +82,11 @@ export function readTomlField(text: string, path: TomlPath, syntax: TomlSyntax):
     value: scalar,
     raw: text.slice(value.keyValue.value.range[0], value.keyValue.value.range[1]),
   };
+}
+
+export function hasTomlTable(text: string, path: TomlPath, syntax: TomlSyntax): boolean {
+  const document = inspectDocument(parseDocument(text, syntax));
+  return findTable(document, path) !== undefined || findInlineContainer(document, path) !== undefined;
 }
 
 export function inspectTomlPaths(
@@ -83,7 +104,7 @@ const assertSafeRawLiteral = (raw: string, expected: TomlScalar, syntax: TomlSyn
   } catch {
     throw new Error(INVALID_VALUE_LITERAL);
   }
-  if (!slot.present || slot.value !== expected) throw new Error(INVALID_VALUE_LITERAL);
+  if (!slot.present || !sameScalar(slot.value, expected)) throw new Error(INVALID_VALUE_LITERAL);
   const inspected = inspectTomlPaths(temp, syntax);
   if (inspected.fieldPaths.length !== 1 || !samePath(inspected.fieldPaths[0]!, ['value'])) {
     throw new Error(INVALID_VALUE_LITERAL);
@@ -104,7 +125,7 @@ const encodeEdit = (text: string, edit: TomlFieldEdit, syntax: TomlSyntax): Enco
     return { path: edit.path, next: { present: true, encoded: edit.next.raw } };
   }
   const current = readTomlField(text, edit.path, syntax);
-  if (current.present && current.value === edit.next.value) {
+  if (current.present && sameScalar(current.value, edit.next.value)) {
     return { path: edit.path, next: { present: true, encoded: current.raw } };
   }
   return { path: edit.path, next: { present: true, encoded: encodeTomlValue(edit.next.value) } };
@@ -112,18 +133,21 @@ const encodeEdit = (text: string, edit: TomlFieldEdit, syntax: TomlSyntax): Enco
 
 const pruneEmptyTables = (text: string, tables: readonly TomlPath[], syntax: TomlSyntax): string => {
   if (tables.length === 0) return text;
-  const document = inspectDocument(parseDocument(text, syntax));
-  const edits = [];
-  for (const path of tables) {
-    const table = findTable(document, path);
-    if (table === undefined || table.kind !== 'standard') continue;
-    if (!tableIsEmpty(document, table)) continue;
-    edits.push(emptyTableHeaderEdit(text, table));
+  let current = text;
+  for (;;) {
+    const document = inspectDocument(parseDocument(current, syntax));
+    const ranked = [...tables].sort((left, right) => right.length - left.length);
+    const edits = [];
+    for (const path of ranked) {
+      const table = findTable(document, path);
+      if (table === undefined || table.kind !== 'standard') continue;
+      if (!tableIsEmpty(document, table)) continue;
+      edits.push(emptyTableHeaderEdit(current, table));
+    }
+    if (edits.length === 0) return current;
+    current = applySourceEdits(current, edits);
+    validateFinalDocument(current, syntax);
   }
-  if (edits.length === 0) return text;
-  const result = applySourceEdits(text, edits);
-  validateFinalDocument(result, syntax);
-  return result;
 };
 
 export function editTomlFields(
@@ -133,7 +157,7 @@ export function editTomlFields(
 ): TomlEditResult {
   const encoded = edits.map((edit) => encodeEdit(text, edit, options));
   const document = inspectDocument(parseDocument(text, options));
-  const planned = planTomlEdits(text, document, encoded);
+  const planned = planTomlEdits(text, document, encoded, options.tableCreation ?? 'dotted');
   const next = applySourceEdits(text, planned.sourceEdits);
   validateFinalDocument(next, options);
   const pruned = pruneEmptyTables(next, options.removeEmptyTables ?? [], options);
