@@ -1,7 +1,8 @@
-import { canonicalizeLoopbackHost, fetchLatestNpmVersion, parseRuntimeConfig } from '@aio-proxy/core';
+import { fetchLatestNpmVersion, parseRuntimeConfig } from '@aio-proxy/core';
 
 import { createAutoUpdateController } from '../auto-update';
 import { warnLeftoverOAuthModels } from '../config-leftover-oauth-models';
+import { warnUnenforcedApiKeys } from '../config-unenforced-api-keys';
 import type { DashboardAssets } from '../dashboard-assets';
 import { prepareDashboardConfig } from '../dashboard-auth';
 import type { DashboardEventLimits } from '../dashboard-events';
@@ -59,16 +60,10 @@ export const createServer = async (options: CreateServerOptions): Promise<AppTyp
   const config = parseRuntimeConfig(prepared.config);
   warnLeftoverOAuthModels(prepared.config, options.logger ?? defaultLogger);
   const boundHost = options.host ?? config.server.host;
-  // Off plus a non-loopback bind is an open proxy reachable from the network. Advisory only:
-  // the operator may be behind their own gateway, so this never blocks startup.
-  if (!config.server.requireApiKey && canonicalizeLoopbackHost(boundHost) === undefined) {
-    logServerEvent(options.logger ?? defaultLogger, {
-      event: 'server.api_key_enforcement_disabled',
-      host: boundHost,
-    });
-  }
+  warnUnenforcedApiKeys(boundHost, config, options.logger ?? defaultLogger);
   const stateOptions: InternalServerStateOptions = {
     config,
+    host: boundHost,
     __dashboardAuthHealthChanged: (available) => {
       dashboardAuthAvailable = available;
     },

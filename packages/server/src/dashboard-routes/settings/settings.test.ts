@@ -40,11 +40,13 @@ type Routes = ReturnType<typeof createDashboardRoutes>;
 async function withSettingsFixture(
   run: (fixture: {
     readonly configPath: string;
+    readonly logs: readonly { readonly event: string }[];
     readonly routes: Routes;
     readonly state: ServerState;
   }) => Promise<void>,
   options: {
     readonly configPath?: boolean;
+    readonly host?: string;
     readonly rejectReload?: { value: boolean };
     readonly controller?: AutoUpdateController;
   } = {},
@@ -65,9 +67,12 @@ async function withSettingsFixture(
   process.env['SETTINGS_PROXY_HOST'] = 'replacement.proxy.example';
   process.env['SETTINGS_ROOT_PROXY'] = 'http://user:password@proxy.example:8080';
   const rejectReload = options.rejectReload;
+  const logs: { readonly event: string }[] = [];
   const state = await createServerState({
     config: parseRuntimeConfig(authoredConfig),
     dbHome: directory,
+    logger: (entry) => logs.push(entry as { readonly event: string }),
+    ...(options.host === undefined ? {} : { host: options.host }),
     ...(options.configPath === false ? {} : { configPath }),
     watchConfig: false,
     ...(rejectReload === undefined
@@ -85,6 +90,7 @@ async function withSettingsFixture(
   try {
     await run({
       configPath,
+      logs,
       routes: createDashboardRoutes(state, disabledDashboardAuthentication, '0.0.0', options.controller),
       state,
     });
@@ -402,21 +408,38 @@ test('a reserved-prefix API key is rejected without changing config bytes', asyn
 });
 
 test('caller-key enforcement is switched without touching the authored keys', async () => {
-  await withSettingsFixture(async ({ configPath, routes }) => {
-    // Recovering a deleted key is exactly what this switch exists to avoid, so turning
-    // enforcement off must leave the array alone — and take effect without a restart.
-    const response = await put(routes, { requireApiKey: false });
+  await withSettingsFixture(
+    async ({ configPath, logs, routes }) => {
+      // Recovering a deleted key is exactly what this switch exists to avoid, so turning
+      // enforcement off must leave the array alone — and take effect without a restart.
+      const response = await put(routes, { requireApiKey: false });
 
-    expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({
-      ok: true,
-      restartRequired: false,
-      settings: { requireApiKey: false, apiKeys: authoredConfig.server.apiKeys },
-    });
-    expect(onDisk(configPath).server).toMatchObject({
-      requireApiKey: false,
-      apiKeys: authoredConfig.server.apiKeys,
-    });
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({
+        ok: true,
+        restartRequired: false,
+        settings: { requireApiKey: false, apiKeys: authoredConfig.server.apiKeys },
+      });
+      expect(onDisk(configPath).server).toMatchObject({
+        requireApiKey: false,
+        apiKeys: authoredConfig.server.apiKeys,
+      });
+      // Taking effect without a restart means the startup warning never runs, so the hot
+      // switch has to raise it: a publicly bound proxy must not go open quietly.
+      expect(logs.filter((entry) => entry.event === 'server.api_key_enforcement_disabled')).toEqual([
+        { event: 'server.api_key_enforcement_disabled', host: '0.0.0.0' },
+      ]);
+    },
+    { host: '0.0.0.0' },
+  );
+});
+
+test('switching caller-key enforcement off on a loopback bind stays quiet', async () => {
+  await withSettingsFixture(async ({ logs, routes }) => {
+    expect((await put(routes, { requireApiKey: false })).status).toBe(200);
+
+    // Unreachable from the network, so an open proxy here is the operator's own machine.
+    expect(logs.some((entry) => entry.event === 'server.api_key_enforcement_disabled')).toBe(false);
   });
 });
 

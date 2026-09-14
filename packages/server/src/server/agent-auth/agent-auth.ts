@@ -20,9 +20,12 @@ export type AgentEnv = {
 };
 
 export type ModelAuthenticationDeps = {
-  /** The keys to check, not the authored ones: `server.requireApiKey` decides whether the
-   *  authored keys are enforced at all, and an unenforced proxy presents nothing to match. */
-  readonly enforcedApiKeys: () => readonly { readonly key: string }[];
+  /** Every authored key, enforced or not: a caller that presents one is identified by it even
+   *  when `server.requireApiKey` is off, so ownership of a realtime call or a video job
+   *  survives the switch. */
+  readonly apiKeys: () => readonly { readonly key: string }[];
+  /** Whether a caller matching none of the keys is rejected. Off admits it anonymously. */
+  readonly enforceApiKeys: () => boolean;
   readonly authenticateAgent: (token: string) => AgentAccessAuthentication;
 };
 
@@ -40,5 +43,5 @@ export const requireModelAuthentication =
       await next();
       return;
     }
-    return authenticateStaticOrAnonymous(context, next, deps.enforcedApiKeys());
+    return authenticateStaticOrAnonymous(context, next, deps.apiKeys(), deps.enforceApiKeys());
   };
