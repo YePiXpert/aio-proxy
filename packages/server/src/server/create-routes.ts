@@ -205,7 +205,13 @@ export const createRoutes = (
     }),
   );
   const modelAuthentication = requireModelAuthentication({
-    apiKeys: () => state.currentConfig().server.apiKeys,
+    // `server.requireApiKey` is the resolved policy, anded with the key count by the config
+    // envelope transform. Off keeps the keys authored but hands the middleware nothing to
+    // match, so callers land on its anonymous branch instead of a 401.
+    enforcedApiKeys: () => {
+      const server = state.currentConfig().server;
+      return server.requireApiKey ? server.apiKeys : [];
+    },
     authenticateAgent: (token) => state.agentIdentity.authenticateAccessToken(token),
   });
   app.get('/v1/models', parseAgentCatalogNegotiation, modelAuthentication, listModelsHandler(state));

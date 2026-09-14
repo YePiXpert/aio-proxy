@@ -26,7 +26,7 @@ function authenticatedApp(input: {
   app.use(
     '*',
     requireModelAuthentication({
-      apiKeys: () => input.apiKeys,
+      enforcedApiKeys: () => input.apiKeys,
       authenticateAgent: input.authenticateAgent,
     }),
   );
