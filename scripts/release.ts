@@ -21,6 +21,13 @@
 //   Splitting pack (bun) from publish (npm) is the only combination that keeps
 //   protocol rewriting AND OIDC + provenance.
 //
+// Two run modes:
+//   - default (push to main, driven by changesets/action): publish the version the
+//     merged Version PR wrote, to the `latest` dist-tag, and tag + Release it.
+//   - `--canary` (workflow_dispatch on any branch): rewrite every manifest to
+//     `X.Y.(Z+1)-canary.<run_number>.<sha7>` and publish to the `canary` dist-tag.
+//     No changelog, no commit, no git tag, no GitHub Release, no Docker/Homebrew.
+//
 // Two public products publish at one lockstep version:
 //   - the CLI: the `aio-proxy` launcher + its per-platform binary packages under
 //     npm/* (bun build --compile fills each npm/cli-*/bin before packing), and
@@ -41,7 +48,13 @@ import { join } from 'node:path';
 
 import { $ } from 'bun';
 
+import { canaryVersion } from './canary-version';
+
 const DRY_RUN = process.argv.includes('--dry-run');
+// canary：对任意分支手动派发时，把全部包改成一个 prerelease 版本并发到 npm 的
+// `canary` dist-tag。不写 changelog、不打 tag、不建 Release——见
+// docs/superpowers/specs/2026-09-15-canary-release-design.md。
+const CANARY = process.argv.includes('--canary');
 
 type PackageJson = {
   name: string;
@@ -101,7 +114,29 @@ const versions = new Set(allPackages.map((p) => p.json.version));
 if (versions.size !== 1) {
   throw new Error(`Workspace versions are not in lockstep: ${[...versions].sort().join(', ')}`);
 }
-const version = [...versions][0]!;
+let version = [...versions][0]!;
+
+// canary 版本必须在 `bun update` 之前写进 manifest：只有这样 bun.lock 的
+// `workspaces` 块才会刷新成 canary 版本，`bun pm pack` 才能把 launcher 的
+// `workspace:*` optionalDeps 和 plugin-sdk 的 `catalog:` 解析成 canary 版本。
+// 私有包也要改——版本被编译进 CLI 二进制与各插件的 *_PLUGIN_VERSION，且上面的
+// 锁步断言要求全仓库一致。
+if (CANARY) {
+  version = canaryVersion({
+    base: version,
+    runNumber: process.env['GITHUB_RUN_NUMBER'] ?? '',
+    sha: process.env['GITHUB_SHA'] ?? '',
+  });
+  // 定点文本替换而非 JSON.stringify 重写整个文件：保留原格式不产生漂移。
+  // 正则锚定顶层字段的两空格缩进（全部 manifest 均为该格式，嵌套字段缩进更深
+  // 不会误命中）。未命中即抛，避免静默发出一个未改版本的包。
+  for (const { path } of allPackages) {
+    const raw = await Bun.file(path).text();
+    const rewritten = raw.replace(/^ {2}"version": "[^"]+"/m, `  "version": "${version}"`);
+    if (rewritten === raw) throw new Error(`Could not rewrite the version field in ${path}`);
+    await Bun.write(path, rewritten);
+  }
+}
 
 console.log(
   `Publishing ${publishable.length} package(s) at v${version}${DRY_RUN ? '  [dry-run]' : ''}:\n${publishable
@@ -211,6 +246,14 @@ const outputPath = process.env['CHANGESETS_OUTPUT'];
 // a valid empty NDJSON (0 events = no releases) instead of an ENOENT.
 if (outputPath) await Bun.write(outputPath, '');
 
+// `--tag canary` 是唯一阻止 canary 覆盖 `latest` 的东西，所以双向断言模式与
+// 版本形态一致：canary 必须是 prerelease，正式发布必须不是。这条断言真正拦住的
+// 是「传了 --canary 但版本改写被跳过」——那会把一个正常版本推上 latest。
+if (CANARY !== version.includes('-canary.')) {
+  throw new Error(`--canary=${CANARY} does not match version ${version}; refusing to publish`);
+}
+const distTag = CANARY ? ['--tag', 'canary'] : [];
+
 for (const { json } of publishable) {
   const name = json.name;
   const tgz = tarballs.get(name)!;
@@ -220,7 +263,7 @@ for (const { json } of publishable) {
     continue;
   }
   console.log(`\nPublishing ${tgz}`);
-  await $`npm publish ${tgz} --provenance --access public`;
+  await $`npm publish ${tgz} --provenance --access public ${distTag}`;
 }
 
 console.log(`\nReleased v${version}`);
