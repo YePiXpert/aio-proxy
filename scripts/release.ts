@@ -133,6 +133,18 @@ if (CANARY) {
     runNumber: process.env['GITHUB_RUN_NUMBER'] ?? '',
     sha: process.env['GITHUB_SHA'] ?? '',
   });
+
+  // 重跑一个陈旧的 canary run 会用同样的 run_number/sha 算出同样的旧版本：已发布的包
+  // 被下面 publish 循环的 `continue` 跳过，缺失的包却会带 `--tag canary` 补发，把这几个
+  // 包的 canary tag 拉回旧版本——同一锁步版本的包散落在两个 canary 上。并发已由
+  // workflow 的 concurrency 组挡住，剩下的就是这种先后顺序的重跑，这里直接拒绝。
+  const currentCanary = (await $`npm view aio-proxy dist-tags.canary`.nothrow().quiet()).text().trim();
+  if (currentCanary && Bun.semver.order(currentCanary, version) > 0) {
+    throw new Error(
+      `The canary dist-tag is already at ${currentCanary}; refusing to publish the older ${version}. ` +
+        `Dispatch a new canary run instead of rerunning this one.`,
+    );
+  }
   // 定点文本替换而非 JSON.stringify 重写整个文件：保留原格式不产生漂移。
   // 正则锚定顶层字段的两空格缩进（全部 manifest 均为该格式，嵌套字段缩进更深
   // 不会误命中）。未命中即抛，避免静默发出一个未改版本的包。
