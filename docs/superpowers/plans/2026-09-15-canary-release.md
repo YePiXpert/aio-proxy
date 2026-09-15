@@ -39,7 +39,7 @@
 - Consumes: 无（本 Task 是叶子）
 - Produces: `canaryVersion({ base, runNumber, sha }: { base: string; runNumber: string; sha: string }): string`，从 `scripts/canary-version/index.ts` 导出。Task 2 会 `import { canaryVersion } from './canary-version'`（相对 `scripts/release.ts` 的路径）。非法输入抛 `Error`。
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 创建 `scripts/canary-version/canary-version.test.ts`：
 
@@ -84,12 +84,12 @@ test('拒绝非法 base、run number 与 sha', () => {
 });
 ```
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 Run: `bun test scripts/canary-version`
 Expected: FAIL — `Cannot find module './canary-version'`。
 
-- [ ] **Step 3: 写最小实现**
+- [x] **Step 3: 写最小实现**
 
 创建 `scripts/canary-version/canary-version.ts`：
 
@@ -128,17 +128,17 @@ export function canaryVersion({
 export { canaryVersion } from './canary-version';
 ```
 
-- [ ] **Step 4: 跑测试确认通过**
+- [x] **Step 4: 跑测试确认通过**
 
 Run: `bun test scripts/canary-version`
 Expected: PASS，5 个 test 全绿。
 
-- [ ] **Step 5: 跑格式与 lint**
+- [x] **Step 5: 跑格式与 lint**
 
 Run: `bun run check`
 Expected: 通过。（若 oxfmt 报格式差异，跑 `bun run format` 后重跑。）
 
-- [ ] **Step 6: 提交**
+- [x] **Step 6: 提交**
 
 ```bash
 git add scripts/canary-version
@@ -160,7 +160,7 @@ git commit -m "feat(scripts): add canary version calculation"
 
 **本 Task 无新增单测。** `release.ts` 是自顶向下的副作用脚本，import 即执行，无法单测；有分支逻辑的部分已在 Task 1 抽走并覆盖。验证靠 Step 6 的 `--dry-run` 实跑。
 
-- [ ] **Step 1: 加 `--canary` 开关与 import**
+- [x] **Step 1: 加 `--canary` 开关与 import**
 
 第 44 行现为：
 
@@ -184,7 +184,7 @@ const CANARY = process.argv.includes('--canary');
 import { canaryVersion } from './canary-version';
 ```
 
-- [ ] **Step 2: 在锁步断言之后改写版本**
+- [x] **Step 2: 在锁步断言之后改写版本**
 
 第 100-104 行现为：
 
@@ -228,7 +228,7 @@ if (CANARY) {
 }
 ```
 
-- [ ] **Step 3: 加双向断言并给 publish 带上 dist-tag**
+- [x] **Step 3: 加双向断言并给 publish 带上 dist-tag**
 
 第 214-224 行的 publish 循环现为：
 
@@ -272,7 +272,7 @@ for (const { json } of publishable) {
 
 Bun shell 会把插值的数组展开成多个独立参数，空数组展开成零个参数，所以正式路径的命令行与改动前完全一致。
 
-- [ ] **Step 4: 更新顶部注释块**
+- [x] **Step 4: 更新顶部注释块**
 
 第 24 行 `// Two public products publish at one lockstep version:` 之前插入一段，说明第二种运行模式：
 
@@ -285,12 +285,12 @@ Bun shell 会把插值的数组展开成多个独立参数，空数组展开成�
 //     No changelog, no commit, no git tag, no GitHub Release, no Docker/Homebrew.
 ```
 
-- [ ] **Step 5: 确认文件仍在 500 行以内**
+- [x] **Step 5: 确认文件仍在 500 行以内**
 
 Run: `wc -l scripts/release.ts`
 Expected: 约 310 行，明显低于 500。
 
-- [ ] **Step 6: `--dry-run` 实跑验证两条路径**
+- [x] **Step 6: `--dry-run` 实跑验证两条路径**
 
 canary 路径（`--dry-run` 会在 publish 前退出，所以不会真发包；但它**会**改写工作区的 manifest 和 bun.lock，跑完必须还原）：
 
@@ -319,12 +319,12 @@ git checkout -- packages npm bun.lock
 
 Expected: 打印当前锁步版本（不含 `-canary.`），同样走完 8 个 pack 并在 dry-run 处停下。
 
-- [ ] **Step 7: 跑 lint 与格式**
+- [x] **Step 7: 跑 lint 与格式**
 
 Run: `bun run check && bun test ./scripts`
 Expected: 全部通过。
 
-- [ ] **Step 8: 提交**
+- [x] **Step 8: 提交**
 
 ```bash
 git add scripts/release.ts
@@ -345,7 +345,7 @@ git commit -m "feat(scripts): add canary publish mode to the release script"
 - Consumes: Task 2 的 `bun run scripts/release.ts --canary`
 - Produces: 无后续 Task 依赖。本 Task 完成即整个特性可用。
 
-- [ ] **Step 1: 加 `workflow_dispatch` 触发并按 ref 拆分并发组**
+- [x] **Step 1: 加 `workflow_dispatch` 触发并按 ref 拆分并发组**
 
 第 16-22 行现为：
 
@@ -376,7 +376,7 @@ concurrency:
   cancel-in-progress: false
 ```
 
-- [ ] **Step 2: 把资产目录与 changesets 两步限定在 push 路径**
+- [x] **Step 2: 把资产目录与 changesets 两步限定在 push 路径**
 
 第 44 行的步骤加 `if`（注释保留不动）：
 
@@ -401,7 +401,7 @@ concurrency:
 - `scripts/release.ts` 里暂存 GH 资产的 `if (assetDirectory)` 依赖 `RELEASE_ASSETS_DIR`，该变量只由上面那步写入 `$GITHUB_ENV`，canary 路径下不存在。
 - 脚本尾部打 tag / 判 CHANGELOG / 写 NDJSON 的整块依赖 `CHANGESETS_OUTPUT`，该变量只由 changesets/action 注入。
 
-- [ ] **Step 3: 新增 canary 发布步骤**
+- [x] **Step 3: 新增 canary 发布步骤**
 
 在 Step 2 改过的 changesets 步骤之后（即原第 92 行 `NODE_AUTH_TOKEN` 那行之后、`# Changesets has already published npm...` 注释之前）插入：
 
@@ -422,14 +422,14 @@ concurrency:
 
 `GITHUB_RUN_NUMBER` 和 `GITHUB_SHA` 由 Actions runner 默认注入，不需要在 `env` 里声明。
 
-- [ ] **Step 4: 本地校验 workflow 语法**
+- [x] **Step 4: 本地校验 workflow 语法**
 
 Run: `bun -e "console.log(Bun.YAML.parse(await Bun.file('.github/workflows/release.yml').text()).on)"`
 Expected: 打印出同时包含 `push` 与 `workflow_dispatch` 的对象（`workflow_dispatch` 的值为 `null`，因为没有 inputs）。
 
 若本机装了 `actionlint`，再跑一次 `actionlint .github/workflows/release.yml`；没装则跳过，不要为此新增依赖。
 
-- [ ] **Step 5: 写文档**
+- [x] **Step 5: 写文档**
 
 `CONTRIBUTING.md` 中 `## Changesets` 小节的最后一行是：
 
@@ -458,12 +458,12 @@ aio-proxy upgrade --force
 A canary sorts above the last release and below the next one, so canary users are not prompted to "upgrade" backwards, and the next real release takes over on its own. Canary versions stay on npm permanently — that is expected, the `canary` dist-tag is just a pointer to the most recent one.
 ````
 
-- [ ] **Step 6: 跑格式检查**
+- [x] **Step 6: 跑格式检查**
 
 Run: `bun run check`
 Expected: 通过。（oxfmt 不处理 `.md` / `.yml`，此步是确认没有误伤到其他文件。）
 
-- [ ] **Step 7: 提交**
+- [x] **Step 7: 提交**
 
 ```bash
 git add .github/workflows/release.yml CONTRIBUTING.md
