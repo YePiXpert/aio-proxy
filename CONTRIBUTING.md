@@ -73,7 +73,7 @@ You do not run `changeset version` or publish by hand. On merge to `main`, CI ma
 
 ## Canary releases
 
-For a change that is large or hard to verify locally, publish a canary build and install it for real. Run the **Release** workflow manually (Actions → Release → Run workflow) and pick your branch. It publishes every package at `X.Y.(Z+1)-canary.<run_number>.<sha7>` to the npm `canary` dist-tag. Nothing else moves: no version commit, no git tag, no GitHub Release, no Docker image, no Homebrew notification, and the `latest` dist-tag is untouched.
+For a change that is large or hard to verify locally, publish a canary build and install it for real. Run the **Release** workflow manually (Actions → Release → Run workflow) and pick your branch. It publishes every package at `X.Y.(Z+1)-canary.<run_number>.<sha7>` — where `X.Y.Z` is the current published release, not your branch's manifest version — to the npm `canary` dist-tag. Nothing else moves: no version commit, no git tag, no GitHub Release, no Docker image, no Homebrew notification, and the `latest` dist-tag is untouched.
 
 ```bash
 # try it once

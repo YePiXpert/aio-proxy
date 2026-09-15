@@ -30,7 +30,7 @@
 0.23.0  →  0.23.1-canary.4213.a1b2c3d
 ```
 
-base 取当前锁步版本的 **patch + 1**。
+base 取 npm 上已发布 `latest` 版本的 **patch + 1**，而不是分支 manifest 里的版本。手动派发允许任意分支，本地版本不一定与稳定线一致：落后的分支（本地 0.23.0、`latest` 已是 0.23.1）会算出排在用户已装版本之下的 canary，令 `upgrade --version` 成为空操作；Version PR 分支（本地 0.24.0）会算出 0.24.1-canary，把待发布的 0.24.0 挡在下面。锚定 `latest` 两种情形都成立。
 
 不用 `0.23.0-canary.x`：prerelease 排在同版本正式版**之下**，`aio-proxy@canary` 会显得比 `latest` 旧，`update-notify`（`packages/cli/src/update-notify/update-notify.ts` 用 `Bun.semver.order`）会反过来提示 canary 用户"升级"到已发布的 0.23.0。patch+1 后满足：
 
@@ -53,7 +53,9 @@ on:
   workflow_dispatch:          # canary：在 UI 中选择任意分支
 
 concurrency:
-  group: release-${{ github.ref }}   # 分支 canary 不再与 main 的正式发布互相排队
+  # 分支 canary 不与 main 的正式发布互相排队；但所有 canary 派发共用一个组——
+  # 它们都移动同一个全局 `canary` dist-tag，并发会让慢的那次把 tag 拉回旧版本。
+  group: release-${{ github.event_name == 'workflow_dispatch' && 'canary' || github.ref }}
   cancel-in-progress: false
 ```
 

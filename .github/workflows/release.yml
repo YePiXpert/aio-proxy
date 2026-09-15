@@ -23,7 +23,10 @@ on:
 
 concurrency:
   # Per-ref: a canary on a branch must not queue behind (or block) main's release.
-  group: release-${{ github.ref }}
+  # All canary dispatches share ONE group regardless of branch, though — they all
+  # move the single global `canary` dist-tag, so two concurrent runs could leave
+  # the tag on the slower (older) one, or split it across the lockstep packages.
+  group: release-${{ github.event_name == 'workflow_dispatch' && 'canary' || github.ref }}
   cancel-in-progress: false
 
 permissions:

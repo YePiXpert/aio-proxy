@@ -25,7 +25,8 @@
 //   - default (push to main, driven by changesets/action): publish the version the
 //     merged Version PR wrote, to the `latest` dist-tag, and tag + Release it.
 //   - `--canary` (workflow_dispatch on any branch): rewrite every manifest to
-//     `X.Y.(Z+1)-canary.<run_number>.<sha7>` and publish to the `canary` dist-tag.
+//     `X.Y.(Z+1)-canary.<run_number>.<sha7>`, where `X.Y.Z` is npm's published
+//     `latest`, and publish to the `canary` dist-tag.
 //     No changelog, no commit, no git tag, no GitHub Release, no Docker/Homebrew.
 //
 // Two public products publish at one lockstep version:
@@ -122,8 +123,13 @@ let version = [...versions][0]!;
 // 私有包也要改——版本被编译进 CLI 二进制与各插件的 *_PLUGIN_VERSION，且上面的
 // 锁步断言要求全仓库一致。
 if (CANARY) {
+  // base 取 npm 上 `latest` 的版本，而不是本地 manifest：手动派发允许任意分支，
+  // 而本地版本可能与已发布的稳定线不一致。落后的分支（本地 0.23.0、latest 已是
+  // 0.23.1）会算出排在用户已装版本之下的 canary，`upgrade --version` 变成空操作；
+  // Version PR 分支（本地 0.24.0）会算出 0.24.1-canary，把待发布的 0.24.0 挡在下面。
+  const latest = (await $`npm view aio-proxy version`.quiet()).text().trim();
   version = canaryVersion({
-    base: version,
+    base: latest,
     runNumber: process.env['GITHUB_RUN_NUMBER'] ?? '',
     sha: process.env['GITHUB_SHA'] ?? '',
   });
