@@ -70,3 +70,20 @@ bun changeset
 - Purely internal changes (refactors, tests, tooling) need no changeset.
 
 You do not run `changeset version` or publish by hand. On merge to `main`, CI maintains a standing `chore: release` Version PR that consumes the accumulated changesets; merging that PR is what cuts a release.
+
+## Canary releases
+
+For a change that is large or hard to verify locally, publish a canary build and install it for real. Run the **Release** workflow manually (Actions → Release → Run workflow) and pick your branch. It publishes every package at `X.Y.(Z+1)-canary.<run_number>.<sha7>` to the npm `canary` dist-tag. Nothing else moves: no version commit, no git tag, no GitHub Release, no Docker image, no Homebrew notification, and the `latest` dist-tag is untouched.
+
+```bash
+# try it once
+bunx aio-proxy@canary
+
+# switch an existing install over
+aio-proxy upgrade --version 0.23.1-canary.4213.a1b2c3d
+
+# go back to the stable line
+aio-proxy upgrade --force
+```
+
+A canary sorts above the last release and below the next one, so canary users are not prompted to "upgrade" backwards, and the next real release takes over on its own. Canary versions stay on npm permanently — that is expected, the `canary` dist-tag is just a pointer to the most recent one.
