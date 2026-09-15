@@ -122,6 +122,7 @@ let version = [...versions][0]!;
 // `workspace:*` optionalDeps 和 plugin-sdk 的 `catalog:` 解析成 canary 版本。
 // 私有包也要改——版本被编译进 CLI 二进制与各插件的 *_PLUGIN_VERSION，且上面的
 // 锁步断言要求全仓库一致。
+const pristineManifests = new Map<string, string>();
 if (CANARY) {
   // base 取 npm 上 `latest` 的版本，而不是本地 manifest：手动派发允许任意分支，
   // 而本地版本可能与已发布的稳定线不一致。落后的分支（本地 0.23.0、latest 已是
@@ -138,11 +139,21 @@ if (CANARY) {
   // 被下面 publish 循环的 `continue` 跳过，缺失的包却会带 `--tag canary` 补发，把这几个
   // 包的 canary tag 拉回旧版本——同一锁步版本的包散落在两个 canary 上。并发已由
   // workflow 的 concurrency 组挡住，剩下的就是这种先后顺序的重跑，这里直接拒绝。
-  const currentCanary = (await $`npm view aio-proxy dist-tags.canary`.nothrow().quiet()).text().trim();
-  if (currentCanary && Bun.semver.order(currentCanary, version) > 0) {
+  //
+  // 必须逐包查：publish 顺序是依赖先于依赖者，launcher `aio-proxy` 排在最后，只看它
+  // 会漏掉「两次 run 各发出前几个包就失败」的情形——那时 launcher 的 tag 还是旧的，
+  // 而前面几个包已经被新 run 推到了新版本。
+  const canaryTags = await Promise.all(
+    publishable.map(async ({ json }) => ({
+      name: json.name,
+      current: (await $`npm view ${`${json.name}@canary`} version`.nothrow().quiet()).text().trim(),
+    })),
+  );
+  const ahead = canaryTags.filter(({ current }) => current && Bun.semver.order(current, version) > 0);
+  if (ahead.length > 0) {
     throw new Error(
-      `The canary dist-tag is already at ${currentCanary}; refusing to publish the older ${version}. ` +
-        `Dispatch a new canary run instead of rerunning this one.`,
+      `The canary dist-tag is already ahead of ${version} on ${ahead.map((t) => `${t.name}@${t.current}`).join(', ')}; ` +
+        `refusing to move it backwards. Dispatch a new canary run instead of rerunning this one.`,
     );
   }
   // 定点文本替换而非 JSON.stringify 重写整个文件：保留原格式不产生漂移。
@@ -152,6 +163,7 @@ if (CANARY) {
     const raw = await Bun.file(path).text();
     const rewritten = raw.replace(/^ {2}"version": "[^"]+"/m, `  "version": "${version}"`);
     if (rewritten === raw) throw new Error(`Could not rewrite the version field in ${path}`);
+    pristineManifests.set(path, raw);
     await Bun.write(path, rewritten);
   }
 }
@@ -232,8 +244,12 @@ for (const tgz of tarballs.values()) {
 }
 
 if (DRY_RUN) {
-  // `bun update` + splice leaves bun.lock byte-identical to the pristine lock, so
-  // there's nothing to restore; the manifests were never rewritten by this script.
+  // A dry run must leave the checkout as it found it. `--canary` rewrote every
+  // manifest above and `bun update` then carried those versions into bun.lock's
+  // `workspaces` block, so put both back (the splice already makes the lock
+  // byte-identical without `--canary`, so this is a no-op there).
+  for (const [path, raw] of pristineManifests) await Bun.write(path, raw);
+  await Bun.write('bun.lock', pristineLock);
   console.log(`\n[dry-run] Would publish ${tarballs.size} tarball(s) with --provenance. Stopping.`);
   process.exit(0);
 }
