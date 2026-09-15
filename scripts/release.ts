@@ -144,10 +144,18 @@ if (CANARY) {
   // 会漏掉「两次 run 各发出前几个包就失败」的情形——那时 launcher 的 tag 还是旧的，
   // 而前面几个包已经被新 run 推到了新版本。
   const canaryTags = await Promise.all(
-    publishable.map(async ({ json }) => ({
-      name: json.name,
-      current: (await $`npm view ${`${json.name}@canary`} version`.nothrow().quiet()).text().trim(),
-    })),
+    publishable.map(async ({ json }) => {
+      // 查 `dist-tags.canary` 而不是 `<pkg>@canary`：包在 registry 上但没有 canary
+      // tag 时前者退出码为 0、输出为空，后者报 E404，与「包本身没发布过」混在一起。
+      const view = await $`npm view ${json.name} dist-tags.canary`.nothrow().quiet();
+      // 唯一可接受的失败是包尚未发布（新增包的首个 canary），npm 报 E404。超时 /
+      // 5xx / 认证失败同样会给出空输出，与「没有 canary tag」无从区分，正好在这道
+      // 守卫最该拦住的时刻放行——所以非 E404 的失败一律 fail closed。
+      if (view.exitCode !== 0 && !view.stderr.toString().includes('E404')) {
+        throw new Error(`Could not read the canary dist-tag for ${json.name}: ${view.stderr.toString().trim()}`);
+      }
+      return { name: json.name, current: view.text().trim() };
+    }),
   );
   const ahead = canaryTags.filter(({ current }) => current && Bun.semver.order(current, version) > 0);
   if (ahead.length > 0) {
