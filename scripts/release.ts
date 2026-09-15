@@ -25,7 +25,7 @@
 //   - default (push to main, driven by changesets/action): publish the version the
 //     merged Version PR wrote, to the `latest` dist-tag, and tag + Release it.
 //   - `--canary` (workflow_dispatch on any branch): rewrite every manifest to
-//     `X.Y.(Z+1)-canary.<run_number>.<sha7>`, where `X.Y.Z` is npm's published
+//     `X.Y.(Z+1)-canary.<run_number>.g<sha7>`, where `X.Y.Z` is npm's published
 //     `latest`, and publish to the `canary` dist-tag.
 //     No changelog, no commit, no git tag, no GitHub Release, no Docker/Homebrew.
 //

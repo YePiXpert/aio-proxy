@@ -20,13 +20,19 @@ test('同一 base 下 run number 递增则版本递增', () => {
 });
 
 test('sha 截断到 7 位并保留在版本里以便追溯', () => {
-  expect(canary).toContain('a1b2c3d');
+  expect(canary).toContain('ga1b2c3d');
   expect(canary).not.toContain(sha);
 });
 
 test('数字标识符不带前导零', () => {
   // semver 规定数字型 prerelease 标识符不得有前导零，否则版本非法。
   expect(canaryVersion({ base: '0.23.0', runNumber: '007', sha })).toContain('.7.');
+
+  // 七位十六进制有约 0.2% 概率全为数字且首位为 0，裸写入就是一个带前导零的
+  // 数字型标识符。`g` 前缀让它始终是字母数字标识符，Bun.semver 才肯排序。
+  const digits = canaryVersion({ base: '0.23.0', runNumber: '1', sha: '0123456789abcdef0123456789abcdef01234567' });
+  expect(digits).toBe('0.23.1-canary.1.g0123456');
+  expect(Bun.semver.order(digits, '0.23.0')).toBe(1);
 });
 
 test('拒绝非法 base、run number 与 sha', () => {

@@ -6,7 +6,7 @@
 
 ## 1. 决策与范围
 
-为「改动大、本地不好验证」的变更提供一条预发布通道：在 GitHub UI 上对任意分支手动派发一次 workflow，把全部 8 个可发布包以 `X.Y.(Z+1)-canary.<run_number>.<sha7>` 的版本发到 npm 的 `canary` dist-tag。使用者通过 `bunx aio-proxy@canary` 或 `aio-proxy upgrade --version <canary 版本>` 装上验证，验证完 `aio-proxy upgrade --force` 回到稳定线。
+为「改动大、本地不好验证」的变更提供一条预发布通道：在 GitHub UI 上对任意分支手动派发一次 workflow，把全部 8 个可发布包以 `X.Y.(Z+1)-canary.<run_number>.g<sha7>` 的版本发到 npm 的 `canary` dist-tag。使用者通过 `bunx aio-proxy@canary` 或 `aio-proxy upgrade --version <canary 版本>` 装上验证，验证完 `aio-proxy upgrade --force` 回到稳定线。
 
 复用现有的 `.github/workflows/release.yml` 文件与 `scripts/release.ts` 脚本，不新建 workflow 文件。canary 路径与正式发布路径在同一个 job 内按 `github.event_name` 分叉。
 
@@ -27,7 +27,7 @@
 ## 3. 版本号方案
 
 ```
-0.23.0  →  0.23.1-canary.4213.a1b2c3d
+0.23.0  →  0.23.1-canary.4213.ga1b2c3d
 ```
 
 base 取 npm 上已发布 `latest` 版本的 **patch + 1**，而不是分支 manifest 里的版本。手动派发允许任意分支，本地版本不一定与稳定线一致：落后的分支（本地 0.23.0、`latest` 已是 0.23.1）会算出排在用户已装版本之下的 canary，令 `upgrade --version` 成为空操作；Version PR 分支（本地 0.24.0）会算出 0.24.1-canary，把待发布的 0.24.0 挡在下面。锚定 `latest` 两种情形都成立。
@@ -126,18 +126,21 @@ scripts/canary-version/
 bunx aio-proxy@canary
 
 # 已安装用户切过去（binary 与 npm 两种安装方式都从 registry 拉 tgz）
-aio-proxy upgrade --version 0.23.1-canary.4213.a1b2c3d
+aio-proxy upgrade --version 0.23.1-canary.4213.ga1b2c3d
 
 # 回到稳定线
 aio-proxy upgrade --force
 ```
 
-`upgrade --version` 与 `binaryTarballUrl` 均为现成能力，canary 不需要任何 CLI 侧改动。
+`upgrade --version` 与 `binaryTarballUrl` 均为现成能力。唯一必要的 CLI 改动是版本解析：`--version` 输出原先用 `/(\d+\.\d+\.\d+)/` 提取，会丢掉 prerelease 后缀，令 binary 安装的装后校验拿 `0.23.1` 去比请求的 `0.23.1-canary.*`，判定失败并回滚刚装好的二进制。现由 `packages/cli/src/upgrade/version-output.ts` 保留后缀。
+
+Homebrew 安装装不了 canary：tap 只有正式版 bottle，且 `runPackageManagerUpgrade` 对 brew 传的是 formula 而非版本，`--version` 被忽略。文档中已注明改用 `bunx` 或非 Homebrew 安装验证。
 
 ## 8. 风险与取舍
 
-1. **`latest` 被打歪**是本方案唯一的严重故障模式。缓解：canary 模式下 publish 前断言 dist-tag 非空。
-2. **OIDC 在 `workflow_dispatch` 下能否通过，只有真跑一次才能确认。** npm 文档指出 dispatch / call 场景校验的是"调用方 workflow 名"；直接派发 `release.yml` 自身时该名称即 `release.yml`，与现有 trusted publisher 配置一致。失败时的退路是 `NPM_TOKEN`（secret 若仍存在则直接生效），不改变方案形状。首次 canary 应视为对这条假设的验证。
-3. **canary 版本永久留在 npm**（72 小时后不可 unpublish）。不做清理自动化；`npm dist-tag` 仅是指针，版本本身长期堆积可接受。
-4. **每次 canary 消耗一个 macOS runner 跑 4 target 全量编译**，成本约等于一次正式发布。这由 launcher optionalDeps 锁精确版本决定，无法省略。macOS runner 的必要性见 `release.yml` 顶部注释（darwin 二进制需与 `codesign` 同机）。
-5. 不需要 changeset：属于发布工具链改动，不改变已发布产品的行为。
+1. **`latest` 被打歪**是本方案唯一的严重故障模式。缓解：canary 模式下断言 `--canary` 与版本形态（是否 prerelease）双向一致。
+2. **派发跑的是分支自己的 `scripts/release.ts`，且带着发布凭据。** 有写权限的人可以在分支上改掉这个脚本、绕过 main 的评审把代码推上 `latest`——即「写权限 == 发布权限」。仓库内的代码无法防住这一点（防的对象正是代码本身），真正的收窄手段是给 canary 路径挂一个带必需审批人的 protected environment，属于仓库设置，需人工决定。已在 CONTRIBUTING 中写明这条信任边界。
+3. **OIDC 在 `workflow_dispatch` 下能否通过，只有真跑一次才能确认。** npm 文档指出 dispatch / call 场景校验的是"调用方 workflow 名"；直接派发 `release.yml` 自身时该名称即 `release.yml`，与现有 trusted publisher 配置一致。失败时的退路是 `NPM_TOKEN`（secret 若仍存在则直接生效），不改变方案形状。首次 canary 应视为对这条假设的验证。
+4. **canary 版本永久留在 npm**（72 小时后不可 unpublish）。不做清理自动化；`npm dist-tag` 仅是指针，版本本身长期堆积可接受。
+5. **每次 canary 消耗一个 macOS runner 跑 4 target 全量编译**，成本约等于一次正式发布。这由 launcher optionalDeps 锁精确版本决定，无法省略。macOS runner 的必要性见 `release.yml` 顶部注释（darwin 二进制需与 `codesign` 同机）。
+6. 不需要 changeset：属于发布工具链改动，不改变已发布产品的行为。
