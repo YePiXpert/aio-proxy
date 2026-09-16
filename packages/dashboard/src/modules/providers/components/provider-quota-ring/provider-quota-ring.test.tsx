@@ -257,3 +257,26 @@ test('clicking the ring does not bubble to the card', () => {
 
   expect(onCardClick).not.toHaveBeenCalled();
 });
+
+test('quota dialog shows dollar usage and allowance, with insufficient data instead of a false zero', () => {
+  queryMocks.data = {
+    sampledAt: 1_700_000_000_000,
+    stale: false,
+    snapshot: {
+      items: [
+        { id: 'secondary', displayName: 'Weekly', remainingRatio: 0.75 },
+        { id: 'primary', displayName: 'Session', remainingRatio: 1 },
+      ],
+    },
+    costs: [
+      { itemId: 'secondary', usedNanoUsd: '10000000000', estimatedTotalNanoUsd: '40000000000' },
+      { itemId: 'primary' },
+    ],
+  };
+  render(<ProviderQuotaRing provider={provider} />);
+  fireEvent.click(screen.getByTestId('provider-quota-ring'));
+  expect(screen.getByTestId('provider-quota-cost-secondary')).toHaveTextContent('$10.00');
+  expect(screen.getByTestId('provider-quota-cost-secondary')).toHaveTextContent('$40.00');
+  expect(screen.getByTestId('provider-quota-cost-primary')).not.toHaveTextContent('$0');
+  expect(screen.getByTestId('provider-quota-cost-primary')).toHaveTextContent(/Insufficient data|数据不足/u);
+});

@@ -2,6 +2,8 @@ export { createTraceStore } from './trace-store';
 export { decodeTraceCursor, encodeTraceCursor } from './trace-queries';
 export type {
   DashboardOverviewQuery,
+  ProviderWindowUsageQuery,
+  ProviderModelWindowUsage,
   SessionAffinityObservation,
   SessionIdentity,
   SessionResponseOwner,

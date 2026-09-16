@@ -1,6 +1,7 @@
 import type { BunSQLiteDatabase } from 'drizzle-orm/bun-sqlite';
 
 import { overviewDashboard, overviewDashboardActivity, overviewDashboardDiagnostics } from './overview';
+import { providerWindowUsage } from './provider-window-usage';
 import { findAffinity, markResponseAmbiguous, resolveResponse } from './session-state';
 import { complete, prune, recover, startRoot } from './trace-lifecycle/index';
 import { find, list } from './trace-queries';
@@ -9,6 +10,7 @@ import { overview } from './usage-overview';
 
 export function createTraceStore(db: BunSQLiteDatabase): TraceStore {
   return {
+    providerWindowUsage: (query) => providerWindowUsage(db, query),
     startRoot: (input) => startRoot(db, input),
     complete: (input) => complete(db, input),
     list: (query) => list(db, query),

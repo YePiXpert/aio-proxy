@@ -24,14 +24,21 @@ async function createQuotaFixture(
     breakRuntime?: boolean;
     breakCredential?: boolean;
     refreshable?: boolean;
+    plugin?: string;
   } = {},
 ) {
-  const { read, breakRuntime = false, breakCredential = false, refreshable = false } = options;
+  const {
+    read,
+    breakRuntime = false,
+    breakCredential = false,
+    refreshable = false,
+    plugin = '@example/oauth',
+  } = options;
   const dir = mkdtempSync(join(tmpdir(), 'aio-dashboard-provider-quota-'));
   const input = {
-    plugins: ['@example/oauth'],
+    plugins: [plugin],
     providers: {
-      person: { kind: 'oauth', plugin: '@example/oauth', capability: 'default', options: { tenant: 'work' } },
+      person: { kind: 'oauth', plugin, capability: 'default', options: { tenant: 'work' } },
       plain: { kind: 'api', protocol: 'openai-compatible', baseURL: 'https://example.com' },
     },
   };
@@ -42,7 +49,7 @@ async function createQuotaFixture(
     targetDigest: 'seed',
     account: {
       providerId: 'person',
-      plugin: '@example/oauth',
+      plugin,
       capability: 'default',
       fingerprint: 'person@example.com',
       options: { tenant: 'work' },
@@ -114,11 +121,12 @@ async function createQuotaFixture(
     config: ConfigSchema.parse(input),
     pluginRepository: repository,
     watchConfig: false,
-    builtIns: [{ packageName: '@example/oauth', version: '1.0.0', descriptor }],
+    builtIns: [{ packageName: plugin, version: '1.0.0', descriptor }],
   });
   const routes = createDashboardRoutes(state, disabledDashboardAuthentication);
   return {
     routes,
+    traceStore: state.traceStore,
     reads: () => reads,
     cleanup: () => {
       state.close();
@@ -143,6 +151,7 @@ test('serves a quota snapshot once and reuses it until an explicit refresh', asy
     const payload = await response.json();
     expect(payload.snapshot).toEqual(SNAPSHOT);
     expect(payload.stale).toBe(false);
+    expect(payload.costs).toBeUndefined();
     expect(payload.sampledAt).toBeGreaterThan(0);
 
     await quota(fixture.routes, 'person');
@@ -231,6 +240,57 @@ test('reports an unreadable quota as 502 rather than an empty snapshot', async (
     const response = await quota(fixture.routes, 'person');
     expect(response.status).toBe(502);
     expect(await response.json()).toEqual({ error: 'OAuth quota read failed' });
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+test('ChatGPT quota endpoint enriches windows with recorded dollar costs and estimated allowance', async () => {
+  const now = Date.now();
+  const fixture = await createQuotaFixture({
+    plugin: '@aio-proxy/plugin-openai-chatgpt',
+    read: async () => ({
+      items: [
+        {
+          id: 'secondary',
+          displayName: 'Weekly',
+          remainingRatio: 0.75,
+          resetsAt: now + 86_400_000,
+          windowMinutes: 10_080,
+        },
+      ],
+    }),
+  });
+  try {
+    const root = {
+      traceId: '1'.repeat(32),
+      spanId: '2'.repeat(16),
+      requestId: 'cost-request',
+      inboundProtocol: 'openai-response',
+      name: 'aio_proxy.request',
+      kind: 1,
+      startedAt: new Date(now - 2000),
+      statusCode: 0,
+      attributes: {},
+      events: [],
+      links: [],
+    };
+    fixture.traceStore.startRoot(root);
+    fixture.traceStore.complete({
+      traceId: root.traceId,
+      rootSpanId: root.spanId,
+      spans: [{ ...root, endedAt: new Date(now - 1000) }],
+      summary: {
+        finalProviderId: 'person',
+        finalModelId: 'gpt-5.4',
+        usage: { providerId: 'person', modelId: 'gpt-5.4', estimatedCostUsd: 10 },
+      },
+    });
+    const response = await quota(fixture.routes, 'person');
+    expect(response.status).toBe(200);
+    expect((await response.json()).costs).toEqual([
+      { itemId: 'secondary', usedNanoUsd: '10000000000', estimatedTotalNanoUsd: '40000000000' },
+    ]);
   } finally {
     fixture.cleanup();
   }

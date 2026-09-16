@@ -100,10 +100,18 @@ export const ProviderQuotaDialog: React.FC<ProviderQuotaDialogProps> = ({
             ) : (
               <ul className="space-y-3">
                 {items.map((item) => (
-                  <ProviderQuotaItem key={item.id} item={item} sampledAt={result.sampledAt} />
+                  <ProviderQuotaItem
+                    key={item.id}
+                    item={item}
+                    sampledAt={result.sampledAt}
+                    cost={result.costs?.find((cost) => cost.itemId === item.id)}
+                  />
                 ))}
               </ul>
             )}
+            {result.costs?.length ? (
+              <p className="text-xs text-muted-foreground">{m['dashboard.providers.quota.cost_note']()}</p>
+            ) : null}
             {result.snapshot.resetCredits === undefined ? null : (
               <div className="flex flex-wrap items-center gap-3">
                 <p className="text-xs text-muted-foreground">

@@ -135,7 +135,21 @@ export type DashboardOverviewQuery = {
   readonly now?: Date;
 };
 
+export type ProviderWindowUsageQuery = {
+  readonly providerId: string;
+  readonly start: Date;
+  readonly end: Date;
+};
+
+export type ProviderModelWindowUsage = {
+  readonly modelId: string;
+  readonly costNanoUsd: string;
+  readonly requestCount: number;
+  readonly pricedRequestCount: number;
+};
+
 export type TraceStore = {
+  readonly providerWindowUsage: (query: ProviderWindowUsageQuery) => readonly ProviderModelWindowUsage[];
   readonly startRoot: (input: TraceRootStart) => void;
   readonly complete: (input: TraceCompletion) => boolean;
   readonly list: (query: TracesQuery) => TracesPage;
