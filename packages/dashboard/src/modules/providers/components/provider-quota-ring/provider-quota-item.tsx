@@ -5,10 +5,13 @@ import type React from 'react';
 import { resolveDashboardText } from '@/lib/localized-text';
 
 import { type ApplicableQuotaItem, quotaPace, remainingPercent } from '../../lib/quota-view';
+import type { ProviderQuotaResult } from '../../services/provider-quota-service';
+import { ProviderQuotaCost } from './provider-quota-cost';
 import { QuotaPaceMarker } from './quota-pace-marker';
 
 interface ProviderQuotaItemProps {
   readonly item: ApplicableQuotaItem;
+  readonly cost?: NonNullable<ProviderQuotaResult['costs']>[number];
   /**
    * When the reading was taken upstream. The pace comparison has to use it rather than the wall
    * clock: a cached snapshot keeps its `remainingRatio` for minutes while an expectation computed
@@ -17,7 +20,7 @@ interface ProviderQuotaItemProps {
   readonly sampledAt: number;
 }
 
-export const ProviderQuotaItem: React.FC<ProviderQuotaItemProps> = ({ item, sampledAt }) => {
+export const ProviderQuotaItem: React.FC<ProviderQuotaItemProps> = ({ item, sampledAt, cost }) => {
   const percent = remainingPercent(item.remainingRatio);
   const tiny = item.remainingRatio > 0 && item.remainingRatio < 0.01;
   const remaining = tiny
@@ -52,6 +55,7 @@ export const ProviderQuotaItem: React.FC<ProviderQuotaItemProps> = ({ item, samp
           />
         )}
       </Progress>
+      {cost === undefined ? null : <ProviderQuotaCost cost={cost} />}
       {item.resetsAt === undefined ? null : (
         <p className="text-xs text-muted-foreground">
           {m['dashboard.providers.quota.resets_at']({ value: new Date(item.resetsAt).toLocaleString(getLocale()) })}

@@ -821,7 +821,11 @@
         "reset_unavailable": "No reset credit is available anymore",
         "stale_notice": "Showing the last successful reading; the latest refresh failed",
         "load_failed": "Quota is unavailable for this Provider",
-        "loading": "Loading quota"
+        "loading": "Loading quota",
+        "cost_used": "Recorded usage (USD)",
+        "cost_total": "Estimated allowance (USD)",
+        "cost_unavailable": "Insufficient data",
+        "cost_note": "API-price equivalents, not a dollar balance. Usage covers recorded aio-proxy requests in this window up to the quota sample. Allowance = recorded cost ÷ quota consumed (at least 1%). Missing prices, history gaps, outside usage, account changes and early resets affect estimates."
       },
       "list_title": "Providers",
       "providers_title": "Providers",

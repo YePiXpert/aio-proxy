@@ -10,6 +10,8 @@ export type { DatabaseOwnershipLock } from './ownership-lock';
 export { createTraceStore, decodeTraceCursor, encodeTraceCursor } from './trace-store';
 export type {
   DashboardOverviewQuery,
+  ProviderWindowUsageQuery,
+  ProviderModelWindowUsage,
   SessionAffinityObservation,
   SessionIdentity,
   SessionResponseOwner,

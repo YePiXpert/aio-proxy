@@ -4,6 +4,7 @@ import { validator } from 'hono/validator';
 
 import { OAuthQuotaCapabilityUnavailableError } from '../../plugin-quota';
 import type { ServerState } from '../../server-state';
+import { chatgptQuotaCosts } from '../chatgpt-quota-cost';
 import { providerPackageQueryValidator, providerPackageStatus } from '../provider-package-metadata';
 import { providerRoutingRevision, providerRoutingValues } from '../provider-routing-mutation';
 
@@ -79,7 +80,8 @@ export const createDashboardProviderReadRoutes = (state: ServerState) =>
     })
     .query('/providers/:id/quota', quotaRefreshValidator, async (context) => {
       const id = context.req.param('id');
-      if (!state.currentConfig().providers.some((provider) => provider.id === id)) {
+      const provider = state.currentConfig().providers.find((provider) => provider.id === id);
+      if (provider === undefined) {
         return context.json({ error: 'provider not found' }, 404);
       }
       try {
@@ -88,6 +90,9 @@ export const createDashboardProviderReadRoutes = (state: ServerState) =>
           snapshot: entry.snapshot,
           sampledAt: entry.sampledAt,
           stale: entry.stale,
+          ...(provider.kind === 'oauth' && provider.plugin === '@aio-proxy/plugin-openai-chatgpt'
+            ? { costs: chatgptQuotaCosts(state.traceStore, id, entry) }
+            : {}),
           ...(entry.error === undefined ? {} : { error: entry.error }),
         });
       } catch (error) {
