@@ -119,6 +119,8 @@ async function rewriteResponsesBody(request: Request, headers: Headers): Promise
     throw new TypeError('ChatGPT Codex Responses request body must be an object');
   }
   const body = value as Record<string, unknown>;
+  // Codex rejects this Responses parameter, including the one-token limit used by model probes.
+  delete body['max_output_tokens'];
   headers.delete('content-encoding');
   headers.delete('content-length');
   const sanitizedInput = stripOrphanReasoningIds(body['input']);
