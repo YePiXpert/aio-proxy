@@ -109,9 +109,6 @@ export const ProviderQuotaDialog: React.FC<ProviderQuotaDialogProps> = ({
                 ))}
               </ul>
             )}
-            {result.costs?.length ? (
-              <p className="text-xs text-muted-foreground">{m['dashboard.providers.quota.cost_note']()}</p>
-            ) : null}
             {result.snapshot.resetCredits === undefined ? null : (
               <div className="flex flex-wrap items-center gap-3">
                 <p className="text-xs text-muted-foreground">

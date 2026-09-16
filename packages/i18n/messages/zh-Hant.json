@@ -822,10 +822,11 @@
         "stale_notice": "顯示上一次成功取得的資料，最近一次重新整理失敗",
         "load_failed": "無法取得該提供商的額度",
         "loading": "正在載入額度",
-        "cost_used": "已用折算（美元）",
-        "cost_total": "預估總額度（美元）",
+        "cost_used": "已用",
+        "cost_total": "預估總額",
         "cost_unavailable": "資料不足",
-        "cost_note": "按 API 價格折算，並非美元餘額。已用金額僅統計本週期內截至額度採樣時經 aio-proxy 記錄的請求。總額度 = 已記錄費用 ÷ 已消耗比例（至少 1%）。缺少價格、歷史不完整、外部使用、更換帳戶及提前重設均會影響估算。"
+        "cost_note": "按 API 價格折算為美元，僅統計 aio-proxy 記錄的請求。",
+        "cost_less_than": "<{amount}"
       },
       "list_title": "提供商",
       "providers_title": "提供商",
