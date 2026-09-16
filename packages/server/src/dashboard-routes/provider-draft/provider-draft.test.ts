@@ -48,6 +48,18 @@ describe('draft Provider catalog and test routes', () => {
             models: ['saved-model'],
             protocol: ProviderProtocol.OpenAICompatible,
             proxy: 'https://saved-proxy.example:8443',
+            apiKey: 'saved-proxied-secret',
+            proxyBackup: 'socks5://saved-backup.example:1080',
+          },
+          'saved-fallback': {
+            baseURL: 'https://saved.example/v1',
+            kind: 'api',
+            models: ['saved-model'],
+            protocol: ProviderProtocol.OpenAICompatible,
+            proxy: 'https://saved-proxy.example:8443',
+            apiKey: 'saved-proxied-secret',
+            proxyBackup: 'socks5://saved-backup.example:1080',
+            proxyFallback: true,
           },
           'saved-sdk': {
             alias: { 'sdk-public': { model: 'saved-sdk-model' } },
@@ -127,6 +139,7 @@ describe('draft Provider catalog and test routes', () => {
         'saved',
         'saved-oauth',
         'saved-proxied',
+        'saved-fallback',
         'saved-sdk',
       ]);
     } finally {
@@ -743,6 +756,56 @@ describe('draft Provider catalog and test routes', () => {
     expect(inherited.ok && inherited.provider.proxy).toBeUndefined();
     expect(disabled.ok && disabled.provider.proxy).toBe(false);
     expect(replaced.ok && replaced.provider.proxy).toBe('https://replacement-proxy.example:9443');
+  });
+
+  test.each([
+    ['saved-proxied', undefined],
+    ['saved-proxied', 'socks5://new-backup.example:1080'],
+    ['saved-fallback', 'socks5://new-backup.example:1080'],
+  ] as const)(
+    'changing active fallback removes retained API credentials and keeps the explicit route (%s, %s)',
+    (id, proxyBackup) => {
+      const result = resolveProviderDraft(
+        state,
+        {
+          id,
+          kind: 'api',
+          protocol: ProviderProtocol.OpenAICompatible,
+          baseURL: 'https://saved.example/v1',
+          proxy: 'https://saved-proxy.example:8443',
+          proxyBackup,
+          proxyFallback: true,
+          apiKey: 'saved-proxied-secret',
+        },
+        id,
+      );
+      expect(result.ok).toBe(true);
+      if (!result.ok || result.provider.kind !== 'api') throw new Error('Expected API draft');
+      expect(result.provider.apiKey).toBeUndefined();
+      expect(result.provider.proxy).toBe('https://saved-proxy.example:8443');
+      expect(result.provider.proxyBackup).toBe(proxyBackup ?? 'socks5://saved-backup.example:1080');
+      expect(result.provider.proxyFallback).toBe(true);
+    },
+  );
+
+  test('changing a disabled backup preserves credentials for the unchanged connection', () => {
+    const result = resolveProviderDraft(
+      state,
+      {
+        id: 'saved-proxied',
+        kind: 'api',
+        protocol: ProviderProtocol.OpenAICompatible,
+        baseURL: 'https://saved.example/v1',
+        proxyBackup: 'socks5://new-backup.example:1080',
+        proxyFallback: false,
+      },
+      'saved-proxied',
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok || result.provider.kind !== 'api') throw new Error('Expected API draft');
+    expect(result.provider.apiKey).toBe('saved-proxied-secret');
+    expect(result.provider.proxy).toBe('https://saved-proxy.example:8443');
+    expect(result.provider.proxyFallback).toBe(false);
   });
 
   test('a shared endpoints object keeps the same identity as an equivalent stored pair', () => {

@@ -186,3 +186,19 @@ test.each([false, true])('separate SOCKS configurations keep their own route (TL
     upstream.stop(true);
   }
 });
+
+test('a standalone SOCKS proxy supports an IPv6 proxy address', async () => {
+  const socks = await socksFixture(undefined, '::1');
+  const upstream = Bun.serve({ port: 0, fetch: () => new Response('ipv6 proxy') });
+  try {
+    const response = await createProxyFetch(`socks5://[::1]:${socks.port}`)(
+      `http://upstream.invalid:${upstream.port}`,
+      { signal: AbortSignal.timeout(2000) },
+    );
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe('ipv6 proxy');
+  } finally {
+    socks.close();
+    upstream.stop(true);
+  }
+});

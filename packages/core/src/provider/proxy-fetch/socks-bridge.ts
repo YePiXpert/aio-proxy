@@ -31,7 +31,7 @@ async function startBridge(): Promise<Server> {
       }
       // Signed, stateless routing avoids retaining old proxy credentials after config reloads.
       const route = JSON.parse(Buffer.from(password, 'base64url').toString('utf8')) as OutboundProxy;
-      return typeof route === 'string' ? { upstreamProxyUrl: route } : prepareFallback(route, options);
+      return prepareFallback(typeof route === 'string' ? { primary: route } : route, options);
     },
   });
   await server.listen();

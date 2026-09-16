@@ -1,5 +1,5 @@
 import type { CredentialPort, OAuthAdapter, OAuthLoginResult } from '@aio-proxy/plugin-sdk';
-import { OAuthPluginProviderSchema } from '@aio-proxy/types';
+import { OAuthPluginProviderSchema, validateProxyFallback } from '@aio-proxy/types';
 import { isPlainObject } from 'es-toolkit/predicate';
 import { z } from 'zod';
 
@@ -17,6 +17,8 @@ import {
 } from './errors';
 import type { OAuthProviderPatch } from './login';
 
+const StagedOAuthProviderSchema = OAuthPluginProviderSchema.superRefine(validateProxyFallback);
+
 export type ConfigRecord = Record<string, unknown>;
 export type PlainRecord = Record<string, unknown>;
 export function providerRecord(current: ConfigRecord): Record<string, unknown> {
@@ -28,7 +30,7 @@ export function providerRecord(current: ConfigRecord): Record<string, unknown> {
 }
 export function structuredEntry(value: unknown): PlainRecord | null {
   if (!isPlainObject(value) || value['kind'] !== 'oauth' || Object.hasOwn(value, 'vendor')) return null;
-  return OAuthPluginProviderSchema.safeParse({ ...value, id: 'staged' }).success ? value : null;
+  return StagedOAuthProviderSchema.safeParse({ ...value, id: 'staged' }).success ? value : null;
 }
 export function capabilityOf(entry: PlainRecord): OAuthCapabilityReference {
   return { plugin: entry['plugin'] as string, capability: entry['capability'] as string };
@@ -48,7 +50,7 @@ export function validateStagedOAuthWrite(candidate: ConfigRecord): void {
   const legacyProviders: Record<string, unknown> = {};
   for (const [id, value] of Object.entries(providers)) {
     if (isPlainObject(value) && value['kind'] === 'oauth' && !Object.hasOwn(value, 'vendor')) {
-      const parsed = OAuthPluginProviderSchema.safeParse({ ...value, id });
+      const parsed = StagedOAuthProviderSchema.safeParse({ ...value, id });
       // A hand-edited `models` on an oauth provider is validated as of this branch, so this rejection is
       // reachable from an ordinary re-login. Standalone issue paths read `["models", 0]` and never say
       // which provider — unactionable in a config with several — so re-throw them rooted at the entry.

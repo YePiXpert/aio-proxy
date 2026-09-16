@@ -1,7 +1,7 @@
 import { once } from 'node:events';
 import { connect, createServer, type Socket } from 'node:net';
 
-export async function socksFixture(auth?: { username: string; password: string }) {
+export async function socksFixture(auth?: { username: string; password: string }, listenHost = '127.0.0.1') {
   const destinations: string[] = [];
   const sockets = new Set<Socket>();
   function track(socket: Socket) {
@@ -54,7 +54,7 @@ export async function socksFixture(auth?: { username: string; password: string }
       upstream.on('close', () => socket.destroy());
     })().catch(() => socket.destroy());
   });
-  server.listen(0, '127.0.0.1');
+  server.listen(0, listenHost);
   await once(server, 'listening');
   const address = server.address();
   if (address === null || typeof address === 'string') throw new Error('Missing address');

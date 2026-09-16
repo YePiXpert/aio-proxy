@@ -49,6 +49,22 @@ export function resolveProviderDraft(
       // Destination/proxy/options changed. The edit-view preloads stored secrets into the
       // draft, so treat those retained values as absent and keep only freshly typed ones.
       candidate = { ...stripRetainedSecrets(previous, normalizedDraft), enabled: true };
+      if (
+        hasSameProviderIdentity(previous, {
+          ...draft,
+          proxyBackup: previous.proxyBackup,
+          proxyFallback: previous.proxyFallback,
+        })
+      ) {
+        // Only the fallback route changed. Keep that explicit policy after removing
+        // upstream credentials; dropping its primary would silently select global.
+        candidate = {
+          ...(candidate as Record<string, unknown>),
+          proxy: previous.proxy,
+          proxyBackup: draft.proxyBackup === undefined ? previous.proxyBackup : draft.proxyBackup,
+          proxyFallback: draft.proxyFallback ?? previous.proxyFallback,
+        };
+      }
       if (inheritsProxy) {
         delete (candidate as Record<string, unknown>)['proxy'];
       }
@@ -76,7 +92,7 @@ export function resolveProviderDraft(
 
 function hasSameProviderIdentity(previous: Provider, draft: DashboardProviderDraft): boolean {
   if (previous.kind === ProviderKind.Api && draft.kind === ProviderKind.Api) {
-    return sameApiDestinations(previous, draft) && hasSameProxyIdentity(previous.proxy, draft.proxy);
+    return sameApiDestinations(previous, draft) && hasSameProxyIdentity(previous, draft);
   }
 
   if (previous.kind === ProviderKind.AiSdk && draft.kind === ProviderKind.AiSdk) {
@@ -84,7 +100,7 @@ function hasSameProviderIdentity(previous: Provider, draft: DashboardProviderDra
     return (
       previous.packageName === packageName &&
       isEqual(draft.options, previous.options) &&
-      hasSameProxyIdentity(previous.proxy, draft.proxy)
+      hasSameProxyIdentity(previous, draft)
     );
   }
 
@@ -115,11 +131,16 @@ function sameApiDestinations(previous: Provider, draft: DashboardProviderDraft):
   }
 }
 
-function hasSameProxyIdentity(previous: string | false | undefined, draft: string | false | null | undefined): boolean {
-  let resolved: string | false | undefined;
-  if (draft === undefined) resolved = previous;
-  else if (draft !== null) resolved = draft;
-  return resolved === previous;
+function hasSameProxyIdentity(previous: Provider, draft: DashboardProviderDraft): boolean {
+  const proxy = draft.proxy === undefined ? previous.proxy : (draft.proxy ?? undefined);
+  if (proxy !== previous.proxy) return false;
+  // Inherit/direct ignore the provider's dormant fallback settings.
+  if (typeof proxy !== 'string') return true;
+  const enabled = draft.proxyFallback ?? previous.proxyFallback ?? false;
+  if (enabled !== (previous.proxyFallback ?? false)) return false;
+  if (!enabled) return true;
+  const backup = draft.proxyBackup === undefined ? previous.proxyBackup : (draft.proxyBackup ?? undefined);
+  return backup === previous.proxyBackup;
 }
 
 function stripRetainedSecrets(previous: Provider, draft: DashboardProviderDraft): DashboardProviderDraft {

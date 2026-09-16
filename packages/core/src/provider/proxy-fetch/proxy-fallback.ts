@@ -6,7 +6,7 @@ import { RequestError, type PrepareRequestFunctionOpts, type PrepareRequestFunct
 import { connectProxy } from './proxy-connect';
 
 export async function prepareFallback(
-  proxies: { readonly primary: string; readonly backup: string },
+  proxies: { readonly primary: string; readonly backup?: string },
   options: PrepareRequestFunctionOpts,
 ): Promise<PrepareRequestFunctionResult> {
   const { request, hostname, port, isHttp } = options;
@@ -17,7 +17,8 @@ export async function prepareFallback(
   if (source.destroyed) controller.abort();
   let target: Socket | undefined;
   try {
-    for (const proxy of [proxies.primary, proxies.backup]) {
+    const candidates = proxies.backup === undefined ? [proxies.primary] : [proxies.primary, proxies.backup];
+    for (const proxy of candidates) {
       if (controller.signal.aborted) break;
       try {
         target = await connectProxy(proxy, hostname, port, controller.signal);
