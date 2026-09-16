@@ -3,6 +3,8 @@ import type { ProviderProtocol } from '@aio-proxy/types';
 
 import { pluginProtocol } from './capabilities';
 
+export { catalogModelIds } from './capabilities';
+
 export { oauthExposedModels } from '@aio-proxy/types';
 export { pluginOptionsIdentityDigest } from './identity';
 export { materializePluginProvider } from './materialize';

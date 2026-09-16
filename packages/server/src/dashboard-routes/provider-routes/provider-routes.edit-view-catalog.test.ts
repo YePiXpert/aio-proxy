@@ -71,7 +71,7 @@ async function createEditViewFixture(options: FixtureOptions = {}) {
           if (fail) throw new Error('upstream refused');
           return {
             language: [{ id: 'model-1' }, { id: 'model-2' }],
-            image: [],
+            image: [{ id: 'gpt-image-2.5-sunburst' }],
             embedding: [],
             speech: [],
             transcription: [],
@@ -164,7 +164,7 @@ test('the refreshing POST rediscovers an unexpired catalog and answers with the 
     // proxy will actually route to.
     expect(await response.json()).toMatchObject({
       catalogRefreshed: true,
-      oauth: { models: ['model-1', 'model-2'] },
+      oauth: { models: ['model-1', 'model-2', 'gpt-image-2.5-sunburst'] },
     });
     expect(fixture.discoveries()).toBe(1);
     expect(fixture.storedModelIds()).toEqual(['model-1', 'model-2']);
