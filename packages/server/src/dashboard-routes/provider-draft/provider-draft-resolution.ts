@@ -55,6 +55,14 @@ export function resolveProviderDraft(
     }
   }
 
+  if (
+    typeof candidate === 'object' &&
+    candidate !== null &&
+    'proxyBackup' in candidate &&
+    candidate.proxyBackup === null
+  ) {
+    delete candidate.proxyBackup;
+  }
   const parsed = ProviderSchema.safeParse(candidate);
   if (!parsed.success) return { ok: false, code: 'persisted_provider_mismatch' };
   // An oauth draft is only testable against its persisted account; a fresh

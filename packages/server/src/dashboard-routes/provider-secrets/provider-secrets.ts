@@ -10,7 +10,9 @@ const SENSITIVE_KEY_PATTERN = /(?:api[-_]?key|authorization|bearer|credential|pa
 const MUSTACHE_PATTERN = /\{\{[\s\S]*\}\}/u;
 
 const isSecretBoundaryKey = (key: string): boolean =>
-  SENSITIVE_KEY_PATTERN.test(key) || key.toLowerCase() === 'headers' || key.toLowerCase() === 'proxy';
+  SENSITIVE_KEY_PATTERN.test(key) ||
+  key.toLowerCase() === 'headers' ||
+  ['proxy', 'proxybackup'].includes(key.toLowerCase());
 
 const maskSecret = (key: string, value: string): string => {
   if (OPENAI_SECRET_PATTERN.test(value)) {
@@ -51,7 +53,9 @@ export const redactSecrets = (value: unknown, key = '', insideSecretBoundary = f
       return redactSecrets(
         entryValue,
         keyStr,
-        insideSecretBoundary || keyStr.toLowerCase() === 'headers' || keyStr.toLowerCase() === 'proxy',
+        insideSecretBoundary ||
+          keyStr.toLowerCase() === 'headers' ||
+          ['proxy', 'proxybackup'].includes(keyStr.toLowerCase()),
       );
     });
   }

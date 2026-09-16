@@ -77,6 +77,8 @@ function settingsView(config: Config, authored: readonly unknown[]): DashboardSe
     },
     port: config.server.port,
     proxy: config.proxy === undefined ? null : '****',
+    proxyBackup: config.proxyBackup === undefined ? null : '****',
+    proxyFallback: config.proxyFallback ?? false,
     requireApiKey: config.server.requireApiKey,
     retryAfterCapMs: config.server.retry.retryAfterCapMs,
   };
@@ -136,16 +138,16 @@ async function applySettingsMutation(
     }
     if (nextServer !== server) next = { ...next, server: nextServer };
   }
-  if (Object.hasOwn(mutation, 'proxy')) {
-    if (mutation.proxy === null) {
-      if (Object.hasOwn(next, 'proxy')) {
-        const { proxy: _proxy, ...withoutProxy } = next;
-        next = withoutProxy;
-      }
-    } else if (next['proxy'] !== mutation.proxy) {
-      next = { ...next, proxy: mutation.proxy };
+  for (const key of ['proxy', 'proxyBackup'] as const) {
+    if (!Object.hasOwn(mutation, key)) continue;
+    if (mutation[key] === null) {
+      const { [key]: _removed, ...rest } = next;
+      next = rest;
+    } else if (next[key] !== mutation[key]) {
+      next = { ...next, [key]: mutation[key] };
     }
   }
+  if (mutation.proxyFallback !== undefined) next = { ...next, proxyFallback: mutation.proxyFallback };
   if (Object.hasOwn(mutation, 'password')) {
     const server = section(next['server'], 'server');
     if (mutation.password === null) {

@@ -134,6 +134,8 @@ export const ApiProviderObjectSchema = z.object({
   ...ApiProviderSharedFields,
   baseURL: z.url().optional().describe('Provider API base URL (primary endpoint, legacy origin semantics).'),
   proxy: ProviderProxySchema.describe(PROXY_DESCRIPTION),
+  proxyBackup: HttpProxyUrlSchema.optional(),
+  proxyFallback: z.boolean().optional(),
 });
 
 export const ApiProviderSchema = ApiProviderObjectSchema.superRefine(validateApiEndpoints);
@@ -162,6 +164,7 @@ export const ApiProviderAuthoringObjectSchema = ApiProviderObjectSchema.omit({
   baseURL: z.union([z.url(), ConfigTemplateStringSchema]).optional().describe('Provider API base URL.'),
   endpoints: ApiEndpointsAuthoringInputSchema.optional(),
   proxy: AuthoringProviderProxySchema.describe(PROXY_DESCRIPTION),
+  proxyBackup: z.union([HttpProxyUrlSchema, ConfigTemplateStringSchema]).optional(),
 });
 
 export const ApiProviderAuthoringSchema = ApiProviderAuthoringObjectSchema.superRefine(validateApiEndpoints);
@@ -174,6 +177,8 @@ export const OAuthPluginProviderSchema = z.object({
   capability: CapabilityIdSchema,
   options: z.record(z.string(), z.unknown()).optional(),
   proxy: ProviderProxySchema.describe(PROXY_DESCRIPTION),
+  proxyBackup: HttpProxyUrlSchema.optional(),
+  proxyFallback: z.boolean().optional(),
 });
 
 export const OAuthProviderSchema = OAuthPluginProviderSchema;
@@ -186,6 +191,7 @@ export const OAuthProviderAuthoringSchema = OAuthProviderSchema.omit({
   plugin: z.union([PluginPackageNameSchema, ConfigTemplateStringSchema]),
   capability: z.union([CapabilityIdSchema, ConfigTemplateStringSchema]),
   proxy: AuthoringProviderProxySchema.describe(PROXY_DESCRIPTION),
+  proxyBackup: z.union([HttpProxyUrlSchema, ConfigTemplateStringSchema]).optional(),
 });
 
 const AiSdkProviderSharedFields = {
@@ -209,6 +215,8 @@ const AiSdkProviderSharedFields = {
 export const AiSdkProviderSchema = z.object({
   ...AiSdkProviderSharedFields,
   proxy: ProviderProxySchema.describe(PROXY_DESCRIPTION),
+  proxyBackup: HttpProxyUrlSchema.optional(),
+  proxyFallback: z.boolean().optional(),
 });
 
 export const AiSdkProviderAuthoringSchema = AiSdkProviderSchema.omit({ proxy: true, packageName: true }).extend({
@@ -217,6 +225,7 @@ export const AiSdkProviderAuthoringSchema = AiSdkProviderSchema.omit({ proxy: tr
     .default('@ai-sdk/openai-compatible')
     .describe('npm package name that exports the AI SDK provider factory.'),
   proxy: AuthoringProviderProxySchema.describe(PROXY_DESCRIPTION),
+  proxyBackup: z.union([HttpProxyUrlSchema, ConfigTemplateStringSchema]).optional(),
 });
 
 // ── Mutation body schemas (POST/PUT) ───────────────────────────────────────────
@@ -241,6 +250,8 @@ export const ApiProviderMutationObjectSchema = z.object({
   ...ApiProviderMutationSharedFields,
   baseURL: z.url().optional(),
   proxy: ProviderMutationProxySchema,
+  proxyBackup: HttpProxyUrlSchema.nullable().optional(),
+  proxyFallback: z.boolean().optional(),
 });
 
 export const ApiProviderMutationBodySchema = ApiProviderMutationObjectSchema.superRefine(validateApiEndpoints);
@@ -256,6 +267,7 @@ const ApiProviderMutationAuthoringBodySchema = ApiProviderMutationObjectSchema.o
     baseURL: z.union([z.url(), ConfigTemplateStringSchema]).optional(),
     endpoints: ApiEndpointsAuthoringInputSchema.optional(),
     proxy: AuthoringProviderProxySchema.nullable(),
+    proxyBackup: z.union([HttpProxyUrlSchema, ConfigTemplateStringSchema]).nullable().optional(),
   })
   .superRefine(validateApiEndpoints);
 
@@ -277,6 +289,8 @@ const AiSdkProviderMutationSharedFields = {
 export const AiSdkProviderMutationBodySchema = z.object({
   ...AiSdkProviderMutationSharedFields,
   proxy: ProviderMutationProxySchema,
+  proxyBackup: HttpProxyUrlSchema.nullable().optional(),
+  proxyFallback: z.boolean().optional(),
 });
 
 const AiSdkProviderMutationAuthoringBodySchema = AiSdkProviderMutationBodySchema.omit({
@@ -285,6 +299,7 @@ const AiSdkProviderMutationAuthoringBodySchema = AiSdkProviderMutationBodySchema
 }).extend({
   packageName: z.union([AiSdkPackageNameSchema, ConfigTemplateStringSchema]).optional(),
   proxy: AuthoringProviderProxySchema.nullable(),
+  proxyBackup: z.union([HttpProxyUrlSchema, ConfigTemplateStringSchema]).nullable().optional(),
 });
 
 export const OAuthProviderMutationBodySchema = z.strictObject({
@@ -296,6 +311,8 @@ export const OAuthProviderMutationBodySchema = z.strictObject({
   weight: RoutingWeightSchema.optional(),
   excludedModels: z.array(z.string()).optional(),
   proxy: ProviderMutationProxySchema,
+  proxyBackup: HttpProxyUrlSchema.nullable().optional(),
+  proxyFallback: z.boolean().optional(),
   alias: AuthoredOAuthAliasSchema.optional().describe('Authored alias overrides and hides on top of plugin defaults.'),
   transforms: ProviderTransformsSchema.optional().describe('Ordered outbound request transforms.'),
 });
@@ -306,6 +323,7 @@ export const ProviderMutationBodySchema = z
     OAuthProviderMutationBodySchema,
     AiSdkProviderMutationBodySchema,
   ])
+  .superRefine(validateProxyFallback)
   .superRefine(validateAliasTargets)
   .transform(normalizeProviderAliasKeys);
 
@@ -315,11 +333,13 @@ export const ProviderMutationAuthoringBodySchema = z
     OAuthProviderMutationBodySchema,
     AiSdkProviderMutationAuthoringBodySchema,
   ])
+  .superRefine(validateProxyFallback)
   .superRefine(validateAliasTargets)
   .transform(normalizeProviderAliasKeys);
 
 export const ProviderSchema = z
   .discriminatedUnion('kind', [ApiProviderObjectSchema, OAuthProviderSchema, AiSdkProviderSchema])
+  .superRefine(validateProxyFallback)
   .superRefine(validateAliasTargets)
   .superRefine(validateApiEndpoints)
   .transform(normalizeProviderAlias);
@@ -350,3 +370,20 @@ export type ProviderMutationAuthoringBodyInput = z.input<typeof ProviderMutation
 export type ProviderMutationAuthoringBody = z.output<typeof ProviderMutationAuthoringBodySchema>;
 export type ProviderInput = z.input<typeof ProviderSchema>;
 export type Provider = z.output<typeof ProviderSchema>;
+
+export function validateProxyFallback(
+  value: {
+    proxy?: string | false | null | undefined;
+    proxyBackup?: string | null | undefined;
+    proxyFallback?: boolean | undefined;
+  },
+  context: z.RefinementCtx,
+): void {
+  if (typeof value.proxy === 'string' && value.proxyFallback === true && !value.proxyBackup) {
+    context.addIssue({
+      code: 'custom',
+      path: ['proxyBackup'],
+      message: 'Provider proxy fallback requires its own backup proxy',
+    });
+  }
+}

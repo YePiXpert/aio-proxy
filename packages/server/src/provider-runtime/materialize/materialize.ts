@@ -4,6 +4,7 @@ import {
   createAiSdkProvider,
   createApiProvider,
   createProxyFetch,
+  type OutboundProxy,
   hasLanguageBridgeEndpoint,
 } from '@aio-proxy/core';
 import type { AliasConfig, Config, ModelMetadata } from '@aio-proxy/types';
@@ -155,9 +156,19 @@ function aliasTargets(alias: Readonly<Record<string, AliasConfig>>): string[] {
 export function effectiveProxy(
   globalProxy: string | undefined,
   providerProxy: string | false | undefined,
-): string | undefined {
+  fallback?: Pick<Config, 'proxyBackup' | 'proxyFallback'>,
+  ownFallback?: { proxyBackup?: string | null | undefined; proxyFallback?: boolean | undefined },
+): OutboundProxy | undefined {
   if (providerProxy === false) return undefined;
-  return providerProxy ?? globalProxy;
+  if (providerProxy !== undefined) {
+    return ownFallback?.proxyFallback === true && ownFallback.proxyBackup
+      ? { primary: providerProxy, backup: ownFallback.proxyBackup }
+      : providerProxy;
+  }
+  if (globalProxy !== undefined && fallback?.proxyFallback === true && fallback.proxyBackup !== undefined) {
+    return { primary: globalProxy, backup: fallback.proxyBackup };
+  }
+  return globalProxy;
 }
 
 export function materializeProviders(config: Config, options: MaterializeProvidersOptions = {}): ProviderRuntime {
@@ -179,7 +190,7 @@ export function materializeProviders(config: Config, options: MaterializeProvide
       case ProviderKind.Api: {
         const providerFetch = createProviderRequestTransformFetch(
           provider,
-          createObservedFetch(createFetch(effectiveProxy(config.proxy, provider.proxy))),
+          createObservedFetch(createFetch(effectiveProxy(config.proxy, provider.proxy, config, provider))),
         );
         const api = createApi(provider, { fetch: providerFetch });
         const endpoints = apiProviderEndpoints(provider);
@@ -205,7 +216,7 @@ export function materializeProviders(config: Config, options: MaterializeProvide
       case ProviderKind.AiSdk: {
         const providerFetch = createProviderRequestTransformFetch(
           provider,
-          createObservedFetch(createFetch(effectiveProxy(config.proxy, provider.proxy))),
+          createObservedFetch(createFetch(effectiveProxy(config.proxy, provider.proxy, config, provider))),
         );
         const aiSdk = createAiSdk(provider, { fetch: providerFetch });
         const instance = withRoutingDefaults(

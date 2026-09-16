@@ -315,7 +315,14 @@ export function startLoginSessions(
       const configuredProxy = configured?.kind === 'oauth' ? configured.proxy : undefined;
       const patchProxy = input.providerPatch?.proxy;
       const providerProxy = patchProxy === undefined ? configuredProxy : (patchProxy ?? undefined);
-      const control = createProxyFetch(effectiveProxy(config.proxy, providerProxy), globalThis.fetch);
+      const control = createProxyFetch(
+        effectiveProxy(config.proxy, providerProxy, config, {
+          proxyBackup:
+            input.providerPatch?.proxyBackup === undefined ? configured?.proxyBackup : input.providerPatch.proxyBackup,
+          proxyFallback: input.providerPatch?.proxyFallback ?? configured?.proxyFallback,
+        }),
+        globalThis.fetch,
+      );
       return createRuntimeFetch({ control, model: control });
     },
     reload,

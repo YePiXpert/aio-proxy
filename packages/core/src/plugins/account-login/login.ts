@@ -52,6 +52,8 @@ export type OAuthProviderPatch = {
   readonly priority?: number | undefined;
   readonly weight: number | undefined;
   readonly proxy?: OAuthProviderMutationBody['proxy'];
+  readonly proxyBackup?: OAuthProviderMutationBody['proxyBackup'];
+  readonly proxyFallback?: OAuthProviderMutationBody['proxyFallback'];
   readonly alias: AuthoredOAuthAlias | undefined;
   readonly excludedModels?: readonly string[] | undefined;
   readonly transforms?: ProviderTransforms | undefined;

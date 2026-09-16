@@ -2,7 +2,13 @@ import { z } from 'zod';
 
 import { AliasConfigSchema, IdSchema } from './common';
 import { DashboardLocalizedTextSchema } from './dashboard-localized-text';
-import { ProviderMutationProxySchema, RoutingPrioritySchema, RoutingWeightSchema } from './provider';
+import {
+  HttpProxyUrlSchema,
+  validateProxyFallback,
+  ProviderMutationProxySchema,
+  RoutingPrioritySchema,
+  RoutingWeightSchema,
+} from './provider';
 import { validateAliasTargets } from './provider-alias';
 import { AuthoredOAuthAliasSchema } from './provider-alias/oauth-alias';
 import { ProviderTransformsSchema } from './provider-transform/index';
@@ -75,9 +81,12 @@ export const DashboardOAuthProviderPatchSchema = z
     weight: RoutingWeightSchema.optional(),
     excludedModels: z.array(z.string()).optional(),
     proxy: ProviderMutationProxySchema,
+    proxyBackup: HttpProxyUrlSchema.nullable().optional(),
+    proxyFallback: z.boolean().optional(),
     alias: AuthoredOAuthAliasSchema.optional(),
     transforms: ProviderTransformsSchema.optional().describe('Ordered outbound request transforms.'),
   })
+  .superRefine(validateProxyFallback)
   .superRefine((value, ctx) => validateAliasTargets({ ...value, kind: 'oauth' }, ctx));
 
 export const DashboardOAuthSessionSchema = z.discriminatedUnion('status', [

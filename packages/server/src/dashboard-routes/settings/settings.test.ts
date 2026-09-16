@@ -141,6 +141,8 @@ test('GET /settings serves the authored caller keys and redacts only the root pr
       logging: { enabled: false, level: 'info', retentionDays: 3 },
       port: 9_317,
       proxy: '****',
+      proxyBackup: null,
+      proxyFallback: false,
       requireApiKey: true,
       retryAfterCapMs: 30_000,
     });
@@ -457,5 +459,23 @@ test('a config whose root parses to a non-object is refused rather than crashing
     expect(write.status).toBe(422);
     expect(await write.json()).toEqual({ ok: false, error: { code: 'config_rejected' } });
     expect(readFileSync(configPath, 'utf8')).toBe(before);
+  });
+});
+
+test('backup credentials are masked and toggling fallback preserves both proxy addresses', async () => {
+  await withSettingsFixture(async ({ routes, configPath }) => {
+    const backup = 'socks5://user:backup-secret@backup.example:1080';
+    const saved = await put(routes, { proxyBackup: backup });
+    expect(saved.status).toBe(200);
+    expect(await saved.json()).toMatchObject({ settings: { proxyBackup: '****', proxyFallback: false } });
+    for (const enabled of [true, false]) {
+      const result = await put(routes, { proxyFallback: enabled });
+      expect(result.status).toBe(200);
+      const text = await result.text();
+      expect(text).not.toContain('backup-secret');
+      expect(JSON.parse(text)).toMatchObject({ settings: { proxyBackup: '****', proxyFallback: enabled } });
+      expect(onDisk(configPath).proxyBackup).toBe(backup);
+      expect(onDisk(configPath).proxy).toBe(authoredConfig.proxy);
+    }
   });
 });

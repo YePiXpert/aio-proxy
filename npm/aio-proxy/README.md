@@ -411,6 +411,18 @@ Set the top-level `proxy` to configure a default HTTP(S) / SOCKS5 proxy. A Provi
 
 SOCKS5 accepts `socks://`, `socks5://`, and `socks5h://` URLs, optionally with percent-encoded username/password (for example, `socks5://user:password@127.0.0.1:1080`). All three use remote DNS; the default port is 1080. This applies to model requests, OAuth traffic, and plugin realtime connections.
 
+Optional global proxy fallback is disabled by default:
+
+```json
+{
+  "proxy": "http://primary.example:8080",
+  "proxyBackup": "socks5://backup.example:1080",
+  "proxyFallback": true
+}
+```
+
+Providers that omit `proxy` inherit this entire policy. A provider can set its own `proxy`, `proxyBackup`, and `proxyFallback` fields to replace the global policy entirely (even when its fallback is disabled); `proxy: false` uses a direct connection. Disabling `proxyFallback` preserves the backup address but only uses the primary. Enabling it requires both addresses. The dashboard exposes the backup address and switch in global settings and in each provider's independent proxy mode. Only choosing the inherit/global mode uses global settings. Each request tries the primary first, with a 5-second proxy connection timeout before trying the backup. HTTP(S) proxies must support CONNECT for fallback. No upstream request is replayed, upstream HTTP errors do not trigger fallback, and failure of both proxies never falls back to direct access.
+
 By default AIO Proxy binds to `127.0.0.1`. Set `server.host` to another non-empty host (for example, `0.0.0.0`) when clients need remote access. The proxy serves HTTP only, so terminate TLS with a reverse proxy, tunnel, or gateway before exposing it beyond a trusted network. Add `server.apiKeys` before doing so:
 
 ```jsonc

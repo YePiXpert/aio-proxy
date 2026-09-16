@@ -13,6 +13,8 @@ export interface OAuthProviderEditValues {
   readonly name?: string | undefined;
   readonly enabled: boolean;
   readonly proxy?: OAuthProviderMutationBody['proxy'];
+  readonly proxyBackup?: OAuthProviderMutationBody['proxyBackup'];
+  readonly proxyFallback?: OAuthProviderMutationBody['proxyFallback'];
   readonly alias?: AuthoredOAuthAlias | undefined;
   readonly excludedModels?: readonly string[] | undefined;
   readonly transforms?: ProviderTransforms | undefined;
@@ -35,6 +37,8 @@ export const oauthProviderEditAction = (
     ...(name === undefined || name === '' ? {} : { name }),
     enabled: values.enabled,
     ...(values.proxy === undefined ? {} : { proxy: values.proxy }),
+    ...(values.proxyBackup === undefined ? {} : { proxyBackup: values.proxyBackup }),
+    ...(values.proxyFallback === undefined ? {} : { proxyFallback: values.proxyFallback }),
     alias: values.alias ?? {},
     excludedModels: [...(values.excludedModels ?? [])],
     ...(values.transforms === undefined ? {} : { transforms: values.transforms }),

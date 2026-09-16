@@ -11,7 +11,7 @@ export const useSettingsMutation = () => {
     onSuccess: async (result, input) => {
       queryClient.setQueryData(queryKeys.settings, result.settings);
       await queryClient.invalidateQueries({ queryKey: queryKeys.settings });
-      if (Object.hasOwn(input, 'proxy')) {
+      if (['proxy', 'proxyBackup', 'proxyFallback'].some((key) => Object.hasOwn(input, key))) {
         await queryClient.invalidateQueries({ queryKey: queryKeys.providers });
       }
       // Setting or clearing the password flips dashboard authentication on or off, so the

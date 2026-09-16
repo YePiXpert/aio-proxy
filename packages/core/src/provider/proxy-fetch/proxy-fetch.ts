@@ -1,3 +1,4 @@
+import type { OutboundProxy } from './socks-bridge';
 import { isSocksProxy, resolveNativeProxyUrl } from './socks-bridge';
 
 export type ProviderFetch = typeof globalThis.fetch;
@@ -8,11 +9,11 @@ export type ProviderFetch = typeof globalThis.fetch;
  * when no proxy is configured so callers pay no overhead in the common case.
  */
 export function createProxyFetch(
-  proxy: string | undefined,
+  proxy: OutboundProxy | undefined,
   fetchImpl: ProviderFetch = globalThis.fetch,
 ): ProviderFetch {
   if (proxy === undefined) return fetchImpl;
-  if (isSocksProxy(proxy)) {
+  if (typeof proxy !== 'string' || isSocksProxy(proxy)) {
     return (async (input, init) =>
       fetchImpl(input, { ...init, proxy: await resolveNativeProxyUrl(proxy) })) as ProviderFetch;
   }

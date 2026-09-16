@@ -19,6 +19,7 @@ import {
   ProviderSchema,
   RoutingPrioritySchema,
   RoutingWeightSchema,
+  validateProxyFallback,
   validateAliasTargets,
   validateApiEndpoints,
 } from '../provider';
@@ -92,6 +93,7 @@ const ProviderInputValueSchema = z
     OAuthProviderSchema.omit({ id: true }),
     AiSdkProviderSchema.omit({ id: true }),
   ])
+  .superRefine(validateProxyFallback)
   .superRefine(validateAliasTargets)
   .superRefine(validateApiEndpoints);
 
@@ -101,6 +103,7 @@ const ProviderAuthoringInputValueSchema = z
     OAuthProviderAuthoringSchema.omit({ id: true }),
     AiSdkProviderAuthoringSchema.omit({ id: true }),
   ])
+  .superRefine(validateProxyFallback)
   .superRefine(validateAliasTargets)
   .superRefine(validateApiEndpoints);
 
@@ -173,17 +176,26 @@ export const ConfigAuthoringSchema = z.object({
   server: ServerConfigAuthoringSchema.prefault({}).describe('Local server settings.'),
   plugins: PluginsAuthoringInputSchema,
   proxy: z.union([HttpProxyUrlSchema, ConfigTemplateStringSchema]).optional().describe(CONFIG_PROXY_DESCRIPTION),
+  proxyBackup: z.union([HttpProxyUrlSchema, ConfigTemplateStringSchema]).optional(),
+  proxyFallback: z.boolean().optional(),
   router: RouterConfigSchema.prefault({}).describe('Routing and model-catalog reconciliation settings.'),
   providers: z.record(z.string().min(1), ProviderAuthoringInputValueSchema),
 });
 
-const ConfigEnvelopeSchema = z.object({
-  server: ServerConfigSchema.prefault({}).describe('Local server settings.'),
-  plugins: PluginsInputSchema,
-  proxy: HttpProxyUrlSchema.optional().describe(CONFIG_PROXY_DESCRIPTION),
-  router: RouterConfigSchema.prefault({}).describe('Routing and model-catalog reconciliation settings.'),
-  providers: z.record(z.string().min(1), z.unknown()),
-});
+const ConfigEnvelopeSchema = z
+  .object({
+    server: ServerConfigSchema.prefault({}).describe('Local server settings.'),
+    plugins: PluginsInputSchema,
+    proxy: HttpProxyUrlSchema.optional().describe(CONFIG_PROXY_DESCRIPTION),
+    proxyBackup: HttpProxyUrlSchema.optional(),
+    proxyFallback: z.boolean().optional(),
+    router: RouterConfigSchema.prefault({}).describe('Routing and model-catalog reconciliation settings.'),
+    providers: z.record(z.string().min(1), z.unknown()),
+  })
+  .refine((value) => value.proxyFallback !== true || (value.proxy !== undefined && value.proxyBackup !== undefined), {
+    message: 'Proxy fallback requires both primary and backup proxies',
+    path: ['proxyFallback'],
+  });
 
 function isLegacyOAuthEntry(value: unknown): boolean {
   return isPlainObject(value) && value['kind'] === ProviderKind.OAuth && Object.hasOwn(value, 'vendor');
@@ -237,6 +249,8 @@ export const ConfigSchema = ConfigEnvelopeSchema.transform((input) => {
     },
     plugins: input.plugins,
     proxy: input.proxy,
+    ...(input.proxyBackup === undefined ? {} : { proxyBackup: input.proxyBackup }),
+    ...(input.proxyFallback === undefined ? {} : { proxyFallback: input.proxyFallback }),
     router: input.router,
     providers,
     invalidProviders,

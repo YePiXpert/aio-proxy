@@ -442,3 +442,17 @@ test.each(['socks', 'socks5', 'socks5h'])('accepts %s proxies in runtime config'
   const proxy = `${scheme}://user:password@localhost:1080`;
   expect(ConfigSchema.parse({ proxy, providers: {} }).proxy).toBe(proxy);
 });
+
+test('enabled proxy fallback requires primary and backup addresses', () => {
+  for (const config of [{ proxyFallback: true }, { proxy: 'http://primary:8080', proxyFallback: true }]) {
+    expect(ConfigSchema.safeParse({ ...config, providers: {} }).success).toBe(false);
+  }
+  expect(
+    ConfigSchema.safeParse({
+      proxy: 'http://primary:8080',
+      proxyBackup: 'socks5://backup:1080',
+      proxyFallback: true,
+      providers: {},
+    }).success,
+  ).toBe(true);
+});

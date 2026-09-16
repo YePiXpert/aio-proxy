@@ -355,6 +355,18 @@ Dashboard 默认位于 `http://127.0.0.1:9317/dashboard`，用于管理 Provider
 
 SOCKS5 支持 `socks://`、`socks5://` 和 `socks5h://`，可携带经过 URL 编码的用户名和密码，例如 `socks5://user:password@127.0.0.1:1080`。三种写法均由代理解析目标域名，默认端口为 1080，适用于模型请求、OAuth 请求和插件实时连接。
 
+主备代理的 fallback 默认关闭。全局设置页和提供商的独立代理模式都可填写备用地址并开启。只有选择全局模式才继承全局配置。例如：
+
+```json
+{
+  "proxy": "http://primary.example:8080",
+  "proxyBackup": "socks5://backup.example:1080",
+  "proxyFallback": true
+}
+```
+
+提供商未设置 `proxy` 时继承整组全局策略；提供商可设置自己的 `proxy`、`proxyBackup` 和 `proxyFallback`，完全覆盖全局策略，即使自己的 fallback 关闭也不会回退全局；设为 `false` 时直连。关闭 fallback 会保留备用地址，但只使用主代理；开启时必须同时配置主备地址。每次请求先尝试主代理，代理建连失败或超过 5 秒后尝试备用代理。HTTP(S) 代理需支持 CONNECT。已经发送的请求不会重发，上游 HTTP 错误不会触发切换，主备都失败时也不会自动直连。
+
 AIO Proxy 进程目前只允许绑定到 `127.0.0.1`、`::1` 或 `localhost`，但可以运行在个人电脑、远程服务器或容器中。需要远程访问时，可以通过反向代理、隧道或网关暴露服务，并在外层配置 TLS、身份认证和访问控制。
 
 ## 常用命令

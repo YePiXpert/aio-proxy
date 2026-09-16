@@ -2,6 +2,10 @@ import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 
 import { Server } from 'proxy-chain';
 
+import { prepareFallback } from './proxy-fallback';
+
+export type OutboundProxy = string | { readonly primary: string; readonly backup: string };
+
 const signingKey = randomBytes(32);
 let bridge: Promise<Server> | undefined;
 
@@ -18,14 +22,16 @@ async function startBridge(): Promise<Server> {
     host: '127.0.0.1',
     port: 0,
     verbose: false,
-    prepareRequestFunction: ({ username, password }) => {
+    prepareRequestFunction: (options) => {
+      const { username, password } = options;
       const expected = Buffer.from(signature(password));
       const actual = Buffer.from(username);
       if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) {
         return { requestAuthentication: true };
       }
       // Signed, stateless routing avoids retaining old proxy credentials after config reloads.
-      return { upstreamProxyUrl: Buffer.from(password, 'base64url').toString('utf8') };
+      const route = JSON.parse(Buffer.from(password, 'base64url').toString('utf8')) as OutboundProxy;
+      return typeof route === 'string' ? { upstreamProxyUrl: route } : prepareFallback(route, options);
     },
   });
   await server.listen();
@@ -38,16 +44,20 @@ async function startBridge(): Promise<Server> {
  * authenticated bridge so Bun still owns TLS, streaming and cancellation.
  * SOCKS URLs use SOCKS5 with remote DNS, including the `socks://` alias.
  */
-export async function resolveNativeProxyUrl(proxy: string): Promise<string> {
-  if (!isSocksProxy(proxy)) return proxy;
-  const upstream = new URL(proxy);
-  upstream.protocol = 'socks5h:';
-  if (!upstream.port) upstream.port = '1080';
+export async function resolveNativeProxyUrl(proxy: OutboundProxy): Promise<string> {
+  if (typeof proxy === 'string' && !isSocksProxy(proxy)) return proxy;
+  let route = proxy;
+  if (typeof proxy === 'string') {
+    const upstream = new URL(proxy);
+    upstream.protocol = 'socks5h:';
+    if (!upstream.port) upstream.port = '1080';
+    route = upstream.href;
+  }
   bridge ??= startBridge().catch((error: unknown) => {
     bridge = undefined;
     throw error;
   });
   const server = await bridge;
-  const payload = Buffer.from(upstream.href).toString('base64url');
+  const payload = Buffer.from(JSON.stringify(route)).toString('base64url');
   return `http://${signature(payload)}:${payload}@127.0.0.1:${server.port}`;
 }

@@ -8,6 +8,7 @@ import { SettingsFieldRow } from '../settings-field-row';
 import { SettingsEndpointFields } from './settings-endpoint-fields';
 import { proxySchema } from './settings-form-contract';
 import { SettingsPasswordField } from './settings-password-field';
+import { SettingsProxyFallback } from './settings-proxy-fallback';
 import type { SettingsFormApi } from './use-settings-form';
 
 interface SettingsServiceGroupProps {
@@ -69,6 +70,7 @@ export const SettingsServiceGroup: React.FC<SettingsServiceGroupProps> = ({
             );
           }}
         </form.Field>
+        <SettingsProxyFallback disabled={disabled} form={form} settings={settings} onSave={onSave} />
       </FieldGroup>
     </CardContent>
   </Card>

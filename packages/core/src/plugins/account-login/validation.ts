@@ -183,6 +183,8 @@ export function providerEntry(
   const alias = patch?.alias ?? existing?.['alias'];
   const excludedModels =
     patch !== undefined && Object.hasOwn(patch, 'excludedModels') ? patch.excludedModels : existing?.['excludedModels'];
+  const proxyBackup = patch?.proxyBackup === undefined ? existing?.['proxyBackup'] : patch.proxyBackup;
+  const proxyFallback = patch?.proxyFallback ?? existing?.['proxyFallback'];
   const proxy = patch?.proxy === undefined ? existing?.['proxy'] : patch.proxy;
   const transforms = patch?.transforms === undefined ? existing?.['transforms'] : patch.transforms;
   return {
@@ -197,6 +199,8 @@ export function providerEntry(
     ...(alias === undefined ? {} : { alias }),
     ...(excludedModels === undefined ? {} : { excludedModels }),
     ...(proxy === undefined || proxy === null ? {} : { proxy }),
+    ...(proxyBackup === undefined || proxyBackup === null ? {} : { proxyBackup }),
+    ...(proxyFallback === undefined ? {} : { proxyFallback }),
     ...(transforms === undefined ? {} : { transforms }),
   };
 }

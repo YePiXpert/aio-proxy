@@ -74,7 +74,7 @@ function createTrackingCredentialPort(
 function controlPlaneFetch(snapshot: Partial<Snapshot>, provider: OAuthProvider) {
   const cached = snapshot.runtimeCache?.get(provider.id)?.fetch;
   if (cached !== undefined) return cached;
-  const control = createProxyFetch(effectiveProxy(snapshot.config?.proxy, provider.proxy));
+  const control = createProxyFetch(effectiveProxy(snapshot.config?.proxy, provider.proxy, snapshot.config, provider));
   return createRuntimeFetch({ control, model: control });
 }
 

@@ -254,3 +254,33 @@ test.each(['socks', 'socks5', 'socks5h'])('persists a templated %s provider prox
     expect(onDisk(configPath).providers.api.proxy).toBe('{{env.PROVIDER_PROXY}}');
   });
 });
+
+test('provider fallback saves independently, redacts credentials, and can switch back to global', async () => {
+  await withNetworkFixture(async (routes, configPath) => {
+    const body = {
+      kind: 'api',
+      id: 'api',
+      protocol: 'openai-response',
+      baseURL: 'https://api.example/v1',
+      models: ['gpt-test'],
+      enabled: true,
+      proxy: 'http://own-primary:8080',
+      proxyBackup: 'socks5://user:backup-secret@own-backup:1080',
+      proxyFallback: true,
+    };
+    const save = (value: unknown) =>
+      routes.request('/providers/api', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(value),
+      });
+    expect((await save(body)).status).toBe(200);
+    expect(onDisk(configPath).providers.api).toMatchObject(body);
+    const config = await routes.request('/config');
+    expect(await config.text()).not.toContain('backup-secret');
+    expect((await save({ ...body, proxyFallback: false })).status).toBe(200);
+    expect(onDisk(configPath).providers.api.proxyBackup).toBe(body.proxyBackup);
+    expect((await save({ ...body, proxy: null })).status).toBe(200);
+    expect(onDisk(configPath).providers.api).not.toHaveProperty('proxy');
+  });
+});

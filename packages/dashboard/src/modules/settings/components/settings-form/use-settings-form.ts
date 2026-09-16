@@ -6,6 +6,8 @@ export const settingsFormValues = (settings: DashboardSettingsView) => ({
   logging: settings.logging,
   port: settings.port,
   proxy: settings.proxy ?? '',
+  proxyBackup: settings.proxyBackup ?? '',
+  proxyFallback: settings.proxyFallback ?? false,
   requireApiKey: settings.requireApiKey,
   retryAfterCapSeconds: settings.retryAfterCapMs / 1_000,
 });

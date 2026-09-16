@@ -316,6 +316,21 @@ test('a global proxy reload rebuilds an OAuth runtime that inherits the proxy', 
     proxies.length = 0;
     await runtimeFetches[1]?.('https://oauth.example/models');
     expect(proxies).toEqual([secondProxy]);
+    const backup = 'socks5://backup.proxy.example:1080';
+    for (const [enabled, count] of [
+      [true, 3],
+      [false, 4],
+    ] as const) {
+      writeFileSync(
+        configPath,
+        JSON.stringify({ ...configInput(secondProxy), proxyBackup: backup, proxyFallback: enabled }),
+      );
+      expect((await state.reload()).ok).toBe(true);
+      expect(runtimeFetches).toHaveLength(count);
+      proxies.length = 0;
+      await runtimeFetches[count - 1]?.('https://oauth.example/models');
+      expect(proxies).toEqual([await resolveNativeProxyUrl(enabled ? { primary: secondProxy, backup } : secondProxy)]);
+    }
   } finally {
     state?.close();
     globalThis.fetch = originalFetch;
