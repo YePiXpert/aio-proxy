@@ -1,4 +1,10 @@
-import { pluginDefaultAliases, type StoredCatalog, validateModelCatalog } from '@aio-proxy/core';
+import {
+  type OutboundProxy,
+  resolveNativeProxyUrl,
+  pluginDefaultAliases,
+  type StoredCatalog,
+  validateModelCatalog,
+} from '@aio-proxy/core';
 import type { AccountContext, CredentialPort } from '@aio-proxy/plugin-sdk';
 import { type Diagnostic, providerLoginCommand } from '@aio-proxy/types';
 
@@ -110,19 +116,19 @@ async function createRuntimeMaterialization(
   persistedSummary: PersistedSummary,
   accountSummary: PreparedOAuthPluginAccount['accountSummary'],
   canRefreshCredential: boolean,
-  runtime: { readonly pin: RuntimeAccountPin; readonly proxy: string | null },
+  runtime: { readonly pin: RuntimeAccountPin; readonly proxy: OutboundProxy | null },
 ): Promise<PluginProviderMaterialization> {
   const { config } = options;
   const fetch = options.runtimeFetch ?? globalThis.fetch;
   try {
     const result = await runtimeDeadline(
-      Promise.resolve().then(() =>
+      Promise.resolve().then(async () =>
         adapter.createRuntime({
           credentials: credentials as never,
           options: accountOptions,
           catalog: storedCatalog.catalog,
           fetch,
-          proxy: runtime.proxy,
+          proxy: runtime.proxy === null ? null : await resolveNativeProxyUrl(runtime.proxy),
         }),
       ),
     );
@@ -156,6 +162,13 @@ async function createRuntimeMaterialization(
   }
 }
 
+function configuredProxy(config: MaterializePluginProviderOptions['config']): OutboundProxy | null {
+  if (typeof config.proxy !== 'string') return null;
+  return config.proxyFallback === true && config.proxyBackup
+    ? { primary: config.proxy, backup: config.proxyBackup }
+    : config.proxy;
+}
+
 export async function materializePluginProvider(
   options: MaterializePluginProviderOptions,
 ): Promise<PluginProviderMaterialization> {
@@ -178,8 +191,7 @@ export async function materializePluginProvider(
   const { adapter, account, accountOptions, accountSummary, createCredentials } = prepared;
   const pin: RuntimeAccountPin = { accountId: account.fingerprint, runtimeRevision: account.runtimeRevision };
   const canRefreshCredential = adapter.refreshCredential !== undefined;
-  let proxyIdentity = options.effectiveProxy;
-  if (proxyIdentity === undefined) proxyIdentity = config.proxy === false ? null : (config.proxy ?? null);
+  const proxyIdentity = options.effectiveProxy === undefined ? configuredProxy(config) : options.effectiveProxy;
   if (adapter.supportsProxy === false && proxyIdentity !== null) {
     return failure(
       options,

@@ -181,7 +181,7 @@ test('normalizes Responses requests for the Codex backend', async () => {
       'content-encoding': 'identity',
       'content-length': '1',
     },
-    body: JSON.stringify({ model: 'gpt-5.6-luna', input: 'hello', store: true, stream: true }),
+    body: JSON.stringify({ model: 'gpt-5.6-luna', input: 'hello', store: true, stream: true, max_output_tokens: 1 }),
   });
 
   const call = requiredCall(calls, 0);

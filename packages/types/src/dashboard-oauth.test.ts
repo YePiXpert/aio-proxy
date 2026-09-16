@@ -79,7 +79,7 @@ test('dashboard OAuth session start accepts a complete routing patch without ide
   ).toThrow();
   expect(() => schema.parse({ ...request, providerPatch: { ...request.providerPatch, proxy: '****' } })).toThrow();
   expect(() =>
-    schema.parse({ ...request, providerPatch: { ...request.providerPatch, proxy: 'socks5://localhost:1080' } }),
+    schema.parse({ ...request, providerPatch: { ...request.providerPatch, proxy: 'ftp://localhost:1080' } }),
   ).toThrow();
 });
 

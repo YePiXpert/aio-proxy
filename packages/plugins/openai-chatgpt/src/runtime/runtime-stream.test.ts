@@ -25,6 +25,25 @@ describe('OpenAI ChatGPT runtime stream protection', () => {
     expect(acceptEncoding()).toBe('identity');
   });
 
+  test('a model probe succeeds when Codex rejects max_output_tokens', async () => {
+    const upstreamFetch = (async (input, init) => {
+      const request = new Request(input, init);
+      const body = await request.json();
+      if ('max_output_tokens' in body) {
+        return Response.json({ detail: 'Unsupported parameter: max_output_tokens' }, { status: 400 });
+      }
+      return new Response(RESPONSES_TERMINAL, { headers: { 'content-type': 'text/event-stream' } });
+    }) as typeof globalThis.fetch;
+    const runtime = await runtimeWithFetch(upstreamFetch);
+    const result = await runtime.provider.languageModel('gpt-5.6-luna').doStream({
+      prompt: [{ role: 'user', content: [{ type: 'text', text: 'ping' }] }],
+      maxOutputTokens: 1,
+    });
+    const parts = await Array.fromAsync(result.stream);
+    expect(parts.some((part) => part.type === 'finish')).toBe(true);
+    expect(parts.some((part) => part.type === 'error')).toBe(false);
+  });
+
   test('raw path requests identity and tolerates a compressed terminal response', async () => {
     let acceptEncoding: string | null = null;
     let decompress: boolean | undefined;

@@ -64,6 +64,8 @@
     "es-toolkit": "catalog:",
     "lru-cache": "catalog:",
     "openai": "catalog:",
+    "proxy-chain": "^2.7.1",
+    "socks": "^2.8.10",
     "zod": "catalog:"
   },
   "devDependencies": {

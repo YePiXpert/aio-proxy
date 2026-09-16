@@ -152,7 +152,7 @@ test('writes a routine logging change exactly once', () => {
 test('clears a configured proxy only after the masked value is deliberately removed', () => {
   renderPage();
 
-  const proxy = screen.getByLabelText(/Default HTTP\(S\) proxy|默认 HTTP\(S\) 代理|預設 HTTP\(S\) 代理/u);
+  const proxy = screen.getByLabelText(/Default HTTP\(S\).*proxy|默认 HTTP\(S\).*代理|預設 HTTP\(S\).*代理/u);
   expect(proxy).toHaveValue('****');
 
   fireEvent.change(proxy, { target: { value: '' } });
@@ -165,7 +165,7 @@ test('clears a configured proxy only after the masked value is deliberately remo
 test('remasks a saved proxy and does not save it again on blur', () => {
   prepareMocks();
   const form = render(<SettingsForm settings={settings} />);
-  const proxy = screen.getByLabelText(/Default HTTP\(S\) proxy|默认 HTTP\(S\) 代理|預設 HTTP\(S\) 代理/u);
+  const proxy = screen.getByLabelText(/Default HTTP\(S\).*proxy|默认 HTTP\(S\).*代理|預設 HTTP\(S\).*代理/u);
 
   fireEvent.change(proxy, { target: { value: 'https://proxy.example:8080' } });
   fireEvent.blur(proxy);
@@ -478,4 +478,26 @@ test('warns that configured keys are not enforced while the switch is off', () =
   expect(
     within(group).getByText(/Enforcement is off|校验已关闭|驗證已關閉|認証は無効|인증이 꺼져/u),
   ).toBeInTheDocument();
+});
+
+test('proxy fallback stays disabled until a backup is saved, then toggles independently', () => {
+  prepareMocks();
+  const view = render(<SettingsForm settings={settings} />);
+  const toggle = screen.getByRole('switch', { name: /proxy fallback|代理 fallback/u });
+  expect(toggle).toHaveAttribute('aria-disabled', 'true');
+  fireEvent.click(toggle);
+  expect(mocks.mutate).not.toHaveBeenCalled();
+  const backup = screen.getByLabelText(/Backup proxy|备用代理|備用代理/u);
+  fireEvent.change(backup, { target: { value: 'socks5://backup.example:1080' } });
+  fireEvent.blur(backup);
+  expect(mocks.mutate).toHaveBeenCalledWith({ proxyBackup: 'socks5://backup.example:1080' });
+  view.rerender(<SettingsForm settings={{ ...settings, proxyBackup: '****', proxyFallback: false }} />);
+  expect(toggle).not.toHaveAttribute('aria-disabled', 'true');
+  expect(screen.getByLabelText(/Backup proxy|备用代理|備用代理/u)).toHaveValue('****');
+  fireEvent.click(toggle);
+  expect(mocks.mutate).toHaveBeenLastCalledWith({ proxyFallback: true });
+  view.rerender(<SettingsForm settings={{ ...settings, proxyBackup: '****', proxyFallback: true }} />);
+  fireEvent.click(toggle);
+  expect(mocks.mutate).toHaveBeenLastCalledWith({ proxyFallback: false });
+  expect(screen.getByLabelText(/Backup proxy|备用代理|備用代理/u)).toHaveValue('****');
 });

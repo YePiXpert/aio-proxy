@@ -5,13 +5,16 @@ import { Label } from '@aio-proxy/ui/components/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@aio-proxy/ui/components/select';
 import type { AnyFieldApi } from '@tanstack/react-form';
 
+import type { ProviderEditorForm } from '../../hooks/use-provider-editor-form';
 import { proxyModeLabel, proxyModeOf, type ProxyMode } from '../../lib/advanced-summary';
+import { ProviderProxyFallbackFields } from './provider-proxy-fallback-fields';
 
 interface ProviderProxyFieldProps {
   readonly field: AnyFieldApi;
+  readonly form?: ProviderEditorForm;
 }
 
-export const ProviderProxyField: React.FC<ProviderProxyFieldProps> = ({ field }) => {
+export const ProviderProxyField: React.FC<ProviderProxyFieldProps> = ({ field, form }) => {
   const proxyMode = proxyModeOf(field.state.value);
   const modeId = `${field.name}-mode`;
   const urlId = `${field.name}-url`;
@@ -49,6 +52,7 @@ export const ProviderProxyField: React.FC<ProviderProxyFieldProps> = ({ field })
           />
         </Field>
       ) : null}
+      {proxyMode === 'url' && form !== undefined ? <ProviderProxyFallbackFields form={form} /> : null}
     </div>
   );
 };

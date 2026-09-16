@@ -48,7 +48,7 @@ export const pluginProtocol = {
 } as const satisfies Record<ProviderProtocol, ProtocolId>;
 
 export function catalogModelIds(
-  catalog: Pick<ModelCatalog, 'language' | 'image' | 'embedding' | 'speech' | 'transcription'>,
+  catalog: Pick<ModelCatalog, 'language' | 'image' | 'embedding' | 'speech' | 'transcription' | 'video'>,
 ): string[] {
   return uniq([
     ...catalog.language.map(({ id }) => id),
@@ -56,6 +56,7 @@ export function catalogModelIds(
     ...catalog.embedding.map(({ id }) => id),
     ...catalog.speech.map(({ id }) => id),
     ...catalog.transcription.map(({ id }) => id),
+    ...(catalog.video ?? []).map(({ id }) => id),
   ]);
 }
 
@@ -67,6 +68,7 @@ function rawCapability(rawResolver: RawResolver | undefined, catalog: ModelCatal
     embedding: descriptorsById(catalog.embedding),
     speech: descriptorsById(catalog.speech),
     transcription: descriptorsById(catalog.transcription),
+    video: descriptorsById(catalog.video ?? []),
   };
   return {
     resolve({ protocol, modelId, capability, requestPath }: RawResolveInput) {
@@ -102,11 +104,18 @@ function rawCapability(rawResolver: RawResolver | undefined, catalog: ModelCatal
   };
 }
 
-type CatalogModality = 'language' | 'image' | 'embedding' | 'speech' | 'transcription';
+type CatalogModality = 'language' | 'image' | 'embedding' | 'speech' | 'transcription' | 'video';
 
 // Fallback order for an id the request's own modality does not list, preserving
 // the order that held when only language/image/embedding existed.
-const MODALITY_FALLBACK: readonly CatalogModality[] = ['language', 'image', 'embedding', 'speech', 'transcription'];
+const MODALITY_FALLBACK: readonly CatalogModality[] = [
+  'language',
+  'image',
+  'embedding',
+  'speech',
+  'transcription',
+  'video',
+];
 
 function descriptorsById(descriptors: readonly ModelDescriptor[]): ReadonlyMap<string, ModelDescriptor> {
   return new Map(descriptors.map((descriptor) => [descriptor.id, descriptor]));
@@ -140,6 +149,7 @@ function preferredModalities(
   protocol: ProviderProtocol,
 ): readonly CatalogModality[] {
   if (capability !== undefined) return [capability];
+  if (protocol === ProviderProtocol.OpenAIVideo) return ['video'];
   if (protocol === ProviderProtocol.OpenAIImage) return ['image'];
   if (protocol === ProviderProtocol.OpenAIAudio) return ['speech', 'transcription'];
   return [];

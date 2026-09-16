@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { loadPluginRegistry, Router } from '@aio-proxy/core';
+import { loadPluginRegistry, resolveNativeProxyUrl, Router } from '@aio-proxy/core';
 import { definePlugin, type RuntimeFetch, zod } from '@aio-proxy/plugin-sdk';
 import { ConfigSchema, ProviderKind } from '@aio-proxy/types';
 
@@ -140,7 +140,11 @@ test('a proxy-unsupported adapter remains available without an effective proxy',
   expect(fixture.createCalls()).toBe(1);
 });
 
-test('the provider config key and proxy override reach the materialized OAuth runtime', async () => {
+test.each([
+  'https://provider-proxy.example:8443',
+  'socks5://user:password@proxy.example:1080',
+  'http://fallback-primary.example:8080',
+])('the provider key and %s override reach OAuth fetch and socket transports', async (providerProxy) => {
   const fixture = runtimeFixture({ kind: 'static' }, { providerId: 'configured-key' });
   const serverHome = mkdtempSync(join(tmpdir(), 'aio-proxy-plugin-runtime-server-'));
   homes.push(serverHome);
@@ -154,6 +158,7 @@ test('the provider config key and proxy override reach the materialized OAuth ru
     { preconnect: originalFetch.preconnect },
   ) as typeof globalThis.fetch;
   let runtimeFetch: RuntimeFetch | undefined;
+  let socketProxy: string | null | undefined;
   const descriptor = definePlugin<unknown>((api) => {
     api.oauth.register({
       id: 'default',
@@ -171,6 +176,7 @@ test('the provider config key and proxy override reach the materialized OAuth ru
       },
       async createRuntime(context) {
         runtimeFetch = context.fetch;
+        socketProxy = context.proxy;
         return {
           provider: {
             specificationVersion: 'v4',
@@ -193,12 +199,17 @@ test('the provider config key and proxy override reach the materialized OAuth ru
     state = await createServerState({
       config: ConfigSchema.parse({
         proxy: 'https://global-proxy.example:8443',
+        proxyBackup: 'socks5://global-backup.example:1080',
+        proxyFallback: true,
         providers: {
           'configured-key': {
             kind: 'oauth',
             plugin: '@example/oauth',
             capability: 'default',
-            proxy: 'https://provider-proxy.example:8443',
+            proxy: providerProxy,
+            ...(providerProxy.includes('fallback-primary')
+              ? { proxyBackup: 'socks5://own-backup.example:1080', proxyFallback: true }
+              : {}),
           },
         },
       }),
@@ -217,7 +228,13 @@ test('the provider config key and proxy override reach the materialized OAuth ru
     proxies.length = 0;
     await runtimeFetch('https://oauth.example/token', { aioProxy: { traffic: 'control' } });
     await runtimeFetch('https://oauth.example/models');
-    expect(proxies).toEqual(['https://provider-proxy.example:8443', 'https://provider-proxy.example:8443']);
+    const nativeProxy = await resolveNativeProxyUrl(
+      providerProxy.includes('fallback-primary')
+        ? { primary: providerProxy, backup: 'socks5://own-backup.example:1080' }
+        : providerProxy,
+    );
+    expect(proxies).toEqual([nativeProxy, nativeProxy]);
+    expect(socketProxy).toBe(nativeProxy);
   } finally {
     state?.close();
     globalThis.fetch = originalFetch;
@@ -309,6 +326,21 @@ test('a global proxy reload rebuilds an OAuth runtime that inherits the proxy', 
     proxies.length = 0;
     await runtimeFetches[1]?.('https://oauth.example/models');
     expect(proxies).toEqual([secondProxy]);
+    const backup = 'socks5://backup.proxy.example:1080';
+    for (const [enabled, count] of [
+      [true, 3],
+      [false, 4],
+    ] as const) {
+      writeFileSync(
+        configPath,
+        JSON.stringify({ ...configInput(secondProxy), proxyBackup: backup, proxyFallback: enabled }),
+      );
+      expect((await state.reload()).ok).toBe(true);
+      expect(runtimeFetches).toHaveLength(count);
+      proxies.length = 0;
+      await runtimeFetches[count - 1]?.('https://oauth.example/models');
+      expect(proxies).toEqual([await resolveNativeProxyUrl(enabled ? { primary: secondProxy, backup } : secondProxy)]);
+    }
   } finally {
     state?.close();
     globalThis.fetch = originalFetch;

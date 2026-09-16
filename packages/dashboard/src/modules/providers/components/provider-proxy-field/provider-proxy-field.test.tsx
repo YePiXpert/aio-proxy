@@ -23,7 +23,7 @@ const Harness: React.FC<HarnessProps> = ({ proxy }) => {
     },
   });
   form = editor;
-  return <editor.Field name="proxy">{(field) => <ProviderProxyField field={field} />}</editor.Field>;
+  return <editor.Field name="proxy">{(field) => <ProviderProxyField field={field} form={editor} />}</editor.Field>;
 };
 
 const pickMode = async (name: RegExp) => {
@@ -55,4 +55,21 @@ describe('ProviderProxyField', () => {
 
     expect(form.state.values.proxy).toBe('');
   });
+});
+
+test('custom fallback keeps its own settings and only global mode selects inheritance', async () => {
+  render(<Harness proxy="http://own-primary:8080" />);
+  fireEvent.change(screen.getByLabelText(/Backup proxy|备用代理/u), { target: { value: 'socks5://own-backup:1080' } });
+  fireEvent.click(screen.getByRole('switch'));
+  expect(form.state.values).toMatchObject({
+    proxy: 'http://own-primary:8080',
+    proxyBackup: 'socks5://own-backup:1080',
+    proxyFallback: true,
+  });
+  fireEvent.click(screen.getByRole('switch'));
+  expect(form.state.values.proxyFallback).toBe(false);
+  expect(form.state.values.proxyBackup).toBe('socks5://own-backup:1080');
+  await pickMode(/Inherit global proxy|继承全局代理/u);
+  expect(form.state.values.proxy).toBeNull();
+  expect(screen.queryByRole('switch')).toBeNull();
 });

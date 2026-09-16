@@ -72,7 +72,9 @@ async function loadAiSdkDraftCatalog(
   // attempt response observation. Draft catalog loading establishes none of the three —
   // the api loader above has the same gap. Wiring them in would look like transform
   // support without providing any.
-  const fetchWithProxy = createProxyFetch(effectiveProxy(state.currentConfig().proxy, provider.proxy));
+  const fetchWithProxy = createProxyFetch(
+    effectiveProxy(state.currentConfig().proxy, provider.proxy, state.currentConfig(), provider),
+  );
   let extensionUnavailable = false;
   if (BUNDLED_PROVIDERS[provider.packageName] === undefined) {
     try {

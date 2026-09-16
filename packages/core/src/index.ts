@@ -256,7 +256,12 @@ export {
   type ProviderV4Embed,
   validateProviderV4,
 } from './provider/provider-v4';
-export { createProxyFetch, type ProviderFetch } from './provider/proxy-fetch';
+export {
+  type OutboundProxy,
+  resolveNativeProxyUrl,
+  createProxyFetch,
+  type ProviderFetch,
+} from './provider/proxy-fetch';
 export {
   type EffectiveCandidateRouting,
   type ModelRoute,

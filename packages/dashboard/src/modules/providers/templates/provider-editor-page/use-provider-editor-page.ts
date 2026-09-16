@@ -81,6 +81,8 @@ const startCreateAuthorization = (
         enabled: true,
         ...(values.name === undefined || values.name.trim() === '' ? {} : { name: values.name.trim() }),
         ...(values.proxy === undefined ? {} : { proxy: values.proxy }),
+        ...(values.proxyBackup === undefined ? {} : { proxyBackup: values.proxyBackup }),
+        ...(values.proxyFallback === undefined ? {} : { proxyFallback: values.proxyFallback }),
       },
     },
     { onError },

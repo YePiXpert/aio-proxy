@@ -8,6 +8,7 @@ import {
 } from '@aio-proxy/types';
 
 import { dashboardOAuthCapabilities, dashboardOAuthForm } from '../dashboard-routes/oauth-capabilities';
+import { catalogModelIds } from '../plugin-runtime';
 import type { SnapshotManager } from '../plugin-snapshot';
 import type { Snapshot } from './snapshot';
 
@@ -56,7 +57,7 @@ export function oauthProviderEditView(
       accountLabel: account?.label ?? account?.fingerprint ?? providerId,
       publicValues: provider.options ?? {},
       form: adapter === undefined ? [] : dashboardOAuthForm(adapter.account.options.form, configuredSecrets),
-      models: catalog?.language.map(({ id }) => id) ?? [],
+      models: catalog === undefined ? [] : catalogModelIds(catalog),
       pluginAliases: pluginAliasSuggestions(adapter, catalog),
     });
   } finally {

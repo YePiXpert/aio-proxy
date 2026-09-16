@@ -78,6 +78,7 @@ export const createDashboardProviderWriteRoutes = (state: ServerState) =>
       }
       const { id, ...bodyRest } = authored;
       if ('proxy' in bodyRest && bodyRest.proxy === null) delete bodyRest.proxy;
+      if ('proxyBackup' in bodyRest && bodyRest.proxyBackup === null) delete bodyRest.proxyBackup;
       const providerData: Record<string, unknown> = { ...bodyRest };
       try {
         await state.configStore.mutateProviders((record) => insertProvider(record, id, providerData));

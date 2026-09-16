@@ -53,7 +53,7 @@ export const AdvancedSection: React.FC<AdvancedSectionProps> = ({
           </form.Subscribe>
         </AccordionTrigger>
         <AccordionContent className="space-y-4">
-          <form.Field name="proxy">{(field) => <ProviderProxyField field={field} />}</form.Field>
+          <form.Field name="proxy">{(field) => <ProviderProxyField field={field} form={form} />}</form.Field>
           {kind === ProviderKind.Api ? (
             <form.Field name="headers">
               {(field) => (

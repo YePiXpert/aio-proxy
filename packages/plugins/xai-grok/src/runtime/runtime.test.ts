@@ -54,7 +54,7 @@ describe('xAI Grok runtime', () => {
     expect(request?.headers.get('user-agent')).toBe('xai-grok-workspace/0.2.120');
   });
 
-  test('exposes Responses language models without raw capability', async () => {
+  test('exposes Responses language models and reserves raw transport for video', async () => {
     const runtime = await createXAIGrokRuntime({
       credentials: port(),
       options: {},
@@ -63,7 +63,8 @@ describe('xAI Grok runtime', () => {
     });
     expect(runtime.provider.specificationVersion).toBe('v4');
     expect(runtime.provider.languageModel('grok-4.5').modelId).toBe('grok-4.5');
-    expect(runtime.raw).toBeUndefined();
+    expect(runtime.raw?.({ protocol: 'openai-response', modelId: 'grok-4.5' })).toBeUndefined();
+    expect(runtime.raw?.({ protocol: 'openai-video', modelId: 'grok-imagine-video' })).toBeDefined();
   });
 
   test('injects CLI identity, sanitizes Responses fields, and compiles custom tools before dispatch', async () => {
@@ -657,3 +658,33 @@ function functionCallStream(name: string, argumentsText: string): Response {
     headers: { 'content-type': 'text/event-stream' },
   });
 }
+
+test('image generation uses the xAI API and downloads image URLs without OAuth credentials', async () => {
+  const requests: Request[] = [];
+  const runtime = await createXAIGrokRuntime({
+    credentials: port(),
+    options: {},
+    catalog: emptyCatalog(),
+    fetch: (async (input, init) => {
+      const request = new Request(input, init);
+      requests.push(request);
+      return request.url === 'https://api.x.ai/v1/images/generations'
+        ? Response.json({ data: [{ url: 'https://images.example/result.png' }] })
+        : new Response(new Uint8Array([1, 2, 3]));
+    }) as RuntimeFetch,
+  });
+  const result = await runtime.provider.imageModel('grok-imagine-image').doGenerate({
+    prompt: 'A blue circle',
+    n: 1,
+    size: undefined,
+    aspectRatio: undefined,
+    seed: undefined,
+    providerOptions: {},
+  });
+  expect(requests).toHaveLength(2);
+  expect(requests[0]?.headers.get('authorization')).toBe('Bearer access-token');
+  expect(await requests[0]?.json()).toMatchObject({ model: 'grok-imagine-image', prompt: 'A blue circle' });
+  expect(requests[1]?.url).toBe('https://images.example/result.png');
+  expect(requests[1]?.headers.get('authorization')).toBeNull();
+  expect(result.images).toHaveLength(1);
+});

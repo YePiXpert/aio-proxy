@@ -200,3 +200,17 @@ test('providerEntry retains stored routing values a patch does not carry', () =>
     weight: 3,
   });
 });
+
+test('staged OAuth writes reject enabled fallback without the provider backup', () => {
+  const provider = {
+    kind: 'oauth',
+    plugin: '@example/oauth',
+    capability: 'default',
+    proxy: 'http://own:8080',
+    proxyFallback: true,
+  };
+  expect(() => validateStagedOAuthWrite({ providers: { person: provider } })).toThrow();
+  expect(() =>
+    validateStagedOAuthWrite({ providers: { person: { ...provider, proxyBackup: 'socks5://backup:1080' } } }),
+  ).not.toThrow();
+});

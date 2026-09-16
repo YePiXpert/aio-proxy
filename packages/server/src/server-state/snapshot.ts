@@ -92,7 +92,7 @@ export async function buildSnapshot(
       const pluginOptionsDigest = pluginOptionsDigests.get(provider.plugin);
       const pluginOptionInput = pluginOptionInputs.get(provider.plugin);
       if (pluginOptionsDigest === undefined) throw new Error(`Missing plugin options digest for ${provider.plugin}`);
-      const resolvedProxy = effectiveProxy(configWithExtend.proxy, provider.proxy);
+      const resolvedProxy = effectiveProxy(configWithExtend.proxy, provider.proxy, configWithExtend, provider);
       const providerFetch = createProxyFetch(resolvedProxy, controlFetch);
       return materializePluginProvider({
         config: provider,

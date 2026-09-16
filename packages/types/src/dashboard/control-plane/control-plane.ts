@@ -58,7 +58,7 @@ const DashboardHttpProxyTemplateSchema = ConfigTemplateStringSchema.pipe(
     .refine(hasOnlySupportedConfigTemplates, 'Unsupported config template')
     .refine(
       (value) => HttpProxyUrlSchema.safeParse(materializeProxyTemplate(value)).success,
-      'Proxy template must have a valid http: or https: URL shape',
+      'Proxy template must have a valid HTTP(S) or SOCKS5 URL shape',
     ),
 );
 
@@ -117,6 +117,8 @@ export const DashboardSettingsViewSchema = z.strictObject({
   host: required(ServerConfigSchema.shape.host),
   port: required(ServerConfigSchema.shape.port),
   proxy: DashboardSettingsProxySchema,
+  proxyBackup: DashboardSettingsProxySchema.optional(),
+  proxyFallback: z.boolean().optional(),
   logging: DashboardSettingsLoggingSchema,
   retryAfterCapMs: required(ServerRetrySchema.shape.retryAfterCapMs),
   hasPassword: z.boolean(),
@@ -128,6 +130,8 @@ export const DashboardSettingsMutationSchema = z.strictObject({
   host: required(ServerConfigSchema.shape.host).optional(),
   port: required(ServerConfigSchema.shape.port).optional(),
   proxy: z.union([DashboardHttpProxyUrlSchema, DashboardHttpProxyTemplateSchema, z.null()]).optional(),
+  proxyBackup: z.union([DashboardHttpProxyUrlSchema, DashboardHttpProxyTemplateSchema, z.null()]).optional(),
+  proxyFallback: z.boolean().optional(),
   password: z.union([DashboardPasswordSchema, z.null()]).optional(),
   apiKeys: z.array(DashboardApiKeyMutationSchema).optional(),
   requireApiKey: z.boolean().optional(),

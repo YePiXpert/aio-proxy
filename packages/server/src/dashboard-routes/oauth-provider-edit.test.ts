@@ -5,7 +5,13 @@ import { join } from 'node:path';
 
 import { createPluginRepository } from '@aio-proxy/core';
 import { openDb } from '@aio-proxy/core/db';
-import { definePlugin, zod, type DefaultAliasSuggestion, type OAuthAdapter } from '@aio-proxy/plugin-sdk';
+import {
+  definePlugin,
+  zod,
+  type DefaultAliasSuggestion,
+  type ModelCatalog,
+  type OAuthAdapter,
+} from '@aio-proxy/plugin-sdk';
 import { ConfigSchema } from '@aio-proxy/types';
 
 import { createServerState } from '#server-test-lifecycle';
@@ -13,7 +19,10 @@ import { createServerState } from '#server-test-lifecycle';
 import { disabledDashboardAuthentication } from '../dashboard-auth/test-support';
 import { createDashboardRoutes } from './config';
 
-async function createOAuthEditFixture(defaultAliases?: OAuthAdapter['catalog']['defaultAliases']) {
+async function createOAuthEditFixture(
+  defaultAliases?: OAuthAdapter['catalog']['defaultAliases'],
+  catalogOverrides: Partial<ModelCatalog> = {},
+) {
   const dir = mkdtempSync(join(tmpdir(), 'aio-dashboard-oauth-edit-'));
   const configPath = join(dir, 'config.json');
   const input = {
@@ -58,6 +67,7 @@ async function createOAuthEditFixture(defaultAliases?: OAuthAdapter['catalog']['
             speech: [],
             transcription: [],
             reranking: [],
+            ...catalogOverrides,
           },
         },
       },
@@ -234,6 +244,37 @@ test('a throwing defaultAliases costs the suggestions, not the editor page', asy
     expect(response.status).toBe(200);
     const edit = (await response.json()) as { oauth: Record<string, unknown> };
     expect(edit.oauth).not.toHaveProperty('pluginAliases');
+  } finally {
+    cleanup();
+  }
+});
+
+test('OAuth editor lists every routable modality once and keeps hidden image models available to re-enable', async () => {
+  const { routes, configPath, cleanup } = await createOAuthEditFixture(undefined, {
+    image: [{ id: 'gpt-image-2.5-sunburst' }, { id: 'model-1' }],
+    embedding: [{ id: 'embed-1' }],
+    speech: [{ id: 'speech-1' }],
+    transcription: [{ id: 'transcribe-1' }],
+  });
+  const models = ['model-1', 'model-2', 'gpt-image-2.5-sunburst', 'embed-1', 'speech-1', 'transcribe-1'];
+  try {
+    const initial = await routes.request('/providers/person/edit-view');
+    expect(initial.status).toBe(200);
+    expect(await initial.json()).toMatchObject({ oauth: { models } });
+
+    for (const excludedModels of [['gpt-image-2.5-sunburst'], []]) {
+      const update = await routes.request('/providers/person', {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ kind: 'oauth', id: 'person', excludedModels }),
+      });
+      expect(update.status).toBe(200);
+      const edit = await routes.request('/providers/person/edit-view');
+      expect(edit.status).toBe(200);
+      expect(await edit.json()).toMatchObject({ provider: { excludedModels }, oauth: { models } });
+      const saved = JSON.parse(readFileSync(configPath, 'utf8'));
+      expect(saved.providers.person.excludedModels ?? []).toEqual(excludedModels);
+    }
   } finally {
     cleanup();
   }

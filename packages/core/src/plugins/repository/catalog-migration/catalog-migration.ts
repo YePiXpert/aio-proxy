@@ -1,7 +1,7 @@
 import type { ModelCatalog, ModelDescriptor } from '@aio-proxy/plugin-sdk';
 import { isPlainObject } from 'es-toolkit/predicate';
 
-const MODALITIES = ['language', 'image', 'embedding', 'speech', 'transcription', 'reranking'] as const;
+const MODALITIES = ['language', 'image', 'embedding', 'speech', 'transcription', 'reranking', 'video'] as const;
 
 // Rows persisted before the metadata→extra rename keep the old key. Static
 // catalogs never refresh and TTL catalogs serve stale rows until a refresh

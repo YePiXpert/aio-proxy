@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 
-import type { ProviderFetch } from '@aio-proxy/core';
+import type { OutboundProxy, ProviderFetch } from '@aio-proxy/core';
 import { ConfigSchema, ProviderKind, ProviderProtocol } from '@aio-proxy/types';
 
-import { materializeProviders } from './materialize';
+import { effectiveProxy, materializeProviders } from './materialize';
 import { stubAiSdkInstance, stubApiInstance } from './proxy.test-support';
 
 describe('materializeProviders proxy resolution', () => {
@@ -19,7 +19,7 @@ describe('materializeProviders proxy resolution', () => {
         },
       },
     });
-    const seenProxies: (string | undefined)[] = [];
+    const seenProxies: (OutboundProxy | undefined)[] = [];
     const capturedFetches: (ProviderFetch | undefined)[] = [];
 
     materializeProviders(config, {
@@ -54,7 +54,7 @@ describe('materializeProviders proxy resolution', () => {
         },
       },
     });
-    const seenProxies: (string | undefined)[] = [];
+    const seenProxies: (OutboundProxy | undefined)[] = [];
 
     materializeProviders(config, {
       createProxyFetch: (proxy) => {
@@ -80,7 +80,7 @@ describe('materializeProviders proxy resolution', () => {
         },
       },
     });
-    const seenProxies: (string | undefined)[] = [];
+    const seenProxies: (OutboundProxy | undefined)[] = [];
 
     materializeProviders(config, {
       createProxyFetch: (proxy) => {
@@ -103,7 +103,7 @@ describe('materializeProviders proxy resolution', () => {
         },
       },
     });
-    const seenProxies: (string | undefined)[] = [];
+    const seenProxies: (OutboundProxy | undefined)[] = [];
 
     materializeProviders(config, {
       createProxyFetch: (proxy) => {
@@ -115,4 +115,43 @@ describe('materializeProviders proxy resolution', () => {
 
     expect(seenProxies).toEqual([undefined]);
   });
+});
+
+describe('global proxy fallback precedence', () => {
+  const policy = { proxyBackup: 'socks5://backup:1080', proxyFallback: true };
+  test('an inheriting provider gets the full enabled global policy', () => {
+    expect(effectiveProxy('http://primary:8080', undefined, policy)).toEqual({
+      primary: 'http://primary:8080',
+      backup: policy.proxyBackup,
+    });
+  });
+  test('fallback defaults off and keeps a saved backup inactive', () => {
+    expect(effectiveProxy('http://primary:8080', undefined, { proxyBackup: policy.proxyBackup })).toBe(
+      'http://primary:8080',
+    );
+    expect(effectiveProxy('http://primary:8080', undefined, { ...policy, proxyFallback: false })).toBe(
+      'http://primary:8080',
+    );
+  });
+  test('provider overrides and direct mode never borrow the global backup', () => {
+    expect(effectiveProxy('http://primary:8080', 'socks://own:1080', policy)).toBe('socks://own:1080');
+    expect(effectiveProxy('http://primary:8080', false, policy)).toBeUndefined();
+  });
+});
+
+test('provider fallback overrides the whole global policy; only inherit uses global', () => {
+  const global = { proxyFallback: true, proxyBackup: 'http://global-backup:8080' };
+  const own = { proxyFallback: true, proxyBackup: 'socks5://own-backup:1080' };
+  expect(effectiveProxy('http://global-primary:8080', 'http://own-primary:8080', global, own)).toEqual({
+    primary: 'http://own-primary:8080',
+    backup: own.proxyBackup,
+  });
+  expect(
+    effectiveProxy('http://global-primary:8080', 'http://own-primary:8080', global, { ...own, proxyFallback: false }),
+  ).toBe('http://own-primary:8080');
+  expect(effectiveProxy('http://global-primary:8080', undefined, global, own)).toEqual({
+    primary: 'http://global-primary:8080',
+    backup: global.proxyBackup,
+  });
+  expect(effectiveProxy('http://global-primary:8080', false, global, own)).toBeUndefined();
 });
