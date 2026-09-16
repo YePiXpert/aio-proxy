@@ -266,17 +266,20 @@ test('quota dialog shows dollar usage and allowance, with insufficient data inst
       items: [
         { id: 'secondary', displayName: 'Weekly', remainingRatio: 0.75 },
         { id: 'primary', displayName: 'Session', remainingRatio: 1 },
+        { id: 'tiny', displayName: 'Tiny', remainingRatio: 0.9 },
       ],
     },
     costs: [
       { itemId: 'secondary', usedNanoUsd: '10000000000', estimatedTotalNanoUsd: '40000000000' },
       { itemId: 'primary' },
+      { itemId: 'tiny', usedNanoUsd: '96', estimatedTotalNanoUsd: '105' },
     ],
   };
   render(<ProviderQuotaRing provider={provider} />);
   fireEvent.click(screen.getByTestId('provider-quota-ring'));
   expect(screen.getByTestId('provider-quota-cost-secondary')).toHaveTextContent('$10.00');
   expect(screen.getByTestId('provider-quota-cost-secondary')).toHaveTextContent('$40.00');
-  expect(screen.getByTestId('provider-quota-cost-primary')).not.toHaveTextContent('$0');
-  expect(screen.getByTestId('provider-quota-cost-primary')).toHaveTextContent(/Insufficient data|数据不足/u);
+  expect(screen.queryByTestId('provider-quota-cost-primary')).not.toBeInTheDocument();
+  expect(screen.getByTestId('provider-quota-cost-tiny')).toHaveTextContent('<$0.01');
+  expect(screen.getByTestId('provider-quota-cost-tiny')).not.toHaveTextContent('0.000000');
 });

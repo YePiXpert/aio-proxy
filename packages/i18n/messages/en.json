@@ -822,10 +822,11 @@
         "stale_notice": "Showing the last successful reading; the latest refresh failed",
         "load_failed": "Quota is unavailable for this Provider",
         "loading": "Loading quota",
-        "cost_used": "Recorded usage (USD)",
-        "cost_total": "Estimated allowance (USD)",
+        "cost_used": "Used",
+        "cost_total": "Est. total",
         "cost_unavailable": "Insufficient data",
-        "cost_note": "API-price equivalents, not a dollar balance. Usage covers recorded aio-proxy requests in this window up to the quota sample. Allowance = recorded cost ÷ quota consumed (at least 1%). Missing prices, history gaps, outside usage, account changes and early resets affect estimates."
+        "cost_note": "API-price equivalents in USD, based only on requests recorded by aio-proxy.",
+        "cost_less_than": "<{amount}"
       },
       "list_title": "Providers",
       "providers_title": "Providers",
