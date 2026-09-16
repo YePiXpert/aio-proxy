@@ -15,6 +15,7 @@ describe('provider login capability resolution', () => {
     '@aio-proxy/plugin-muse-code',
     '@aio-proxy/plugin-cursor',
     '@aio-proxy/plugin-openrouter',
+    '@aio-proxy/plugin-opencode-go',
     '@aio-proxy/plugin-claude-code',
   ] as const;
 

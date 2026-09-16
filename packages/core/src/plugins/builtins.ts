@@ -5,6 +5,7 @@ import { createGoogleAntigravityPlugin, GOOGLE_ANTIGRAVITY_PLUGIN_VERSION } from
 import { createKimiCodePlugin, KIMI_CODE_PLUGIN_VERSION } from '@aio-proxy/plugin-kimi-code';
 import { createMuseCodePlugin, MUSE_CODE_PLUGIN_VERSION } from '@aio-proxy/plugin-muse-code';
 import { createOpenAIChatGPTPlugin, OPENAI_CHATGPT_PLUGIN_VERSION } from '@aio-proxy/plugin-openai-chatgpt';
+import { createOpenCodeGoPlugin, OPENCODE_GO_PLUGIN_VERSION } from '@aio-proxy/plugin-opencode-go';
 import { createOpenRouterPlugin, OPENROUTER_PLUGIN_VERSION } from '@aio-proxy/plugin-openrouter';
 import type { PluginDescriptor } from '@aio-proxy/plugin-sdk';
 import { createXAIGrokPlugin, XAI_GROK_PLUGIN_VERSION } from '@aio-proxy/plugin-xai-grok';
@@ -19,6 +20,7 @@ export const BUILT_IN_PLUGIN_PACKAGE_NAMES = [
   '@aio-proxy/plugin-kimi-code',
   '@aio-proxy/plugin-muse-code',
   '@aio-proxy/plugin-openai-chatgpt',
+  '@aio-proxy/plugin-opencode-go',
   '@aio-proxy/plugin-openrouter',
   '@aio-proxy/plugin-xai-grok',
 ] as const;
@@ -125,6 +127,24 @@ export function createEmbeddedBuiltIns(): readonly BuiltInPluginDefinition[] {
           '使用 ChatGPT Plus 或 Pro 账号访问模型',
         ),
         adapterLabel: localized('Login with ChatGPT (Plus/Pro)', '使用 ChatGPT（Plus/Pro）登录'),
+      }) as unknown as PluginDescriptor<unknown>,
+    },
+    {
+      packageName: '@aio-proxy/plugin-opencode-go',
+      version: OPENCODE_GO_PLUGIN_VERSION,
+      descriptor: createOpenCodeGoPlugin({
+        pluginLabel: localized('OpenCode Go', 'OpenCode Go'),
+        pluginDescription: localized(
+          'Use an OpenCode Go subscription to access open coding models',
+          '使用 OpenCode Go 订阅访问开源编码模型',
+        ),
+        adapterLabel: localized('Login with OpenCode Go', '使用 OpenCode Go 登录'),
+        apiKeyLabel: localized('OpenCode API key', 'OpenCode API key'),
+        apiKeyDescription: localized(
+          'Create or copy a key at https://opencode.ai/auth. Go needs its own paid subscription.',
+          '在 https://opencode.ai/auth 创建或复制 API key。Go 需要单独的付费订阅。',
+        ),
+        waitingForAuthorization: localized('Waiting for OpenCode authorization', '正在等待 OpenCode 授权'),
       }) as unknown as PluginDescriptor<unknown>,
     },
     {
