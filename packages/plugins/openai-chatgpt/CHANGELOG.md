@@ -1,5 +1,14 @@
 # @aio-proxy/plugin-openai-chatgpt
 
+## 0.24.0
+
+### Patch Changes
+
+- [#370](https://github.com/aio-proxy/aio-proxy/pull/370) [`9de6d0e`](https://github.com/aio-proxy/aio-proxy/commit/9de6d0ec7fde99c9de87f993d3c1fb8f890690fe) Thanks [@YePiXpert](https://github.com/YePiXpert)! - Fix OpenAI ChatGPT model tests and Responses requests failing because the Codex backend rejects max_output_tokens. The ChatGPT plugin now omits this unsupported output limit.
+- Updated dependencies [[`1cb5c9f`](https://github.com/aio-proxy/aio-proxy/commit/1cb5c9f3fc91c5e48ef673eb7be0b9971942386e), [`d50feb0`](https://github.com/aio-proxy/aio-proxy/commit/d50feb0764829686811aaff59b8134e47b493ea4)]:
+  - @aio-proxy/plugin-sdk@0.24.0
+  - @aio-proxy/types@0.24.0
+
 ## 0.23.2
 
 ### Patch Changes

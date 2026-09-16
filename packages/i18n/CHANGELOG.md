@@ -1,5 +1,11 @@
 # @aio-proxy/i18n
 
+## 0.24.0
+
+### Minor Changes
+
+- [#370](https://github.com/aio-proxy/aio-proxy/pull/370) [`d50feb0`](https://github.com/aio-proxy/aio-proxy/commit/d50feb0764829686811aaff59b8134e47b493ea4) Thanks [@YePiXpert](https://github.com/YePiXpert)! - Add authenticated SOCKS5 outbound proxies and optional primary/backup proxy fallback, disabled by default. Only providers set to inherit use the global policy; independent provider primary/backup settings and direct connections override it. Fallback switches only before a request is sent and never bypasses the proxies.
+
 ## 0.23.2
 
 No changes in this release.

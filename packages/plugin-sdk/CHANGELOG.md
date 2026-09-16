@@ -1,5 +1,17 @@
 # @aio-proxy/plugin-sdk
 
+## 0.24.0
+
+### Minor Changes
+
+- [#370](https://github.com/aio-proxy/aio-proxy/pull/370) [`1cb5c9f`](https://github.com/aio-proxy/aio-proxy/commit/1cb5c9f3fc91c5e48ef673eb7be0b9971942386e) Thanks [@YePiXpert](https://github.com/YePiXpert)! - Discover Grok OAuth image and video models instead of filtering them from the account catalog. Support image generation/editing and video creation, polling, and content retrieval with the same account. Plugins can optionally declare a video catalog without exposing video-only models as chat models.
+
+### Patch Changes
+
+- Updated dependencies [[`d50feb0`](https://github.com/aio-proxy/aio-proxy/commit/d50feb0764829686811aaff59b8134e47b493ea4)]:
+  - @aio-proxy/types@0.24.0
+  - @aio-proxy/shared@0.24.0
+
 ## 0.23.2
 
 ### Patch Changes
