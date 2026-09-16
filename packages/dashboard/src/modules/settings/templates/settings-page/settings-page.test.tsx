@@ -484,13 +484,15 @@ test('proxy fallback stays disabled until a backup is saved, then toggles indepe
   prepareMocks();
   const view = render(<SettingsForm settings={settings} />);
   const toggle = screen.getByRole('switch', { name: /proxy fallback|代理 fallback/u });
-  expect(toggle).toBeDisabled();
+  expect(toggle).toHaveAttribute('aria-disabled', 'true');
+  fireEvent.click(toggle);
+  expect(mocks.mutate).not.toHaveBeenCalled();
   const backup = screen.getByLabelText(/Backup proxy|备用代理|備用代理/u);
   fireEvent.change(backup, { target: { value: 'socks5://backup.example:1080' } });
   fireEvent.blur(backup);
   expect(mocks.mutate).toHaveBeenCalledWith({ proxyBackup: 'socks5://backup.example:1080' });
   view.rerender(<SettingsForm settings={{ ...settings, proxyBackup: '****', proxyFallback: false }} />);
-  expect(toggle).not.toBeDisabled();
+  expect(toggle).not.toHaveAttribute('aria-disabled', 'true');
   expect(screen.getByLabelText(/Backup proxy|备用代理|備用代理/u)).toHaveValue('****');
   fireEvent.click(toggle);
   expect(mocks.mutate).toHaveBeenLastCalledWith({ proxyFallback: true });

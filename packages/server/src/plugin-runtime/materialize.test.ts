@@ -140,96 +140,106 @@ test('a proxy-unsupported adapter remains available without an effective proxy',
   expect(fixture.createCalls()).toBe(1);
 });
 
-test.each(['https://provider-proxy.example:8443', 'socks5://user:password@proxy.example:1080'])(
-  'the provider key and %s override reach OAuth fetch and socket transports',
-  async (providerProxy) => {
-    const fixture = runtimeFixture({ kind: 'static' }, { providerId: 'configured-key' });
-    const serverHome = mkdtempSync(join(tmpdir(), 'aio-proxy-plugin-runtime-server-'));
-    homes.push(serverHome);
-    const originalFetch = globalThis.fetch;
-    const proxies: (string | undefined)[] = [];
-    globalThis.fetch = Object.assign(
-      async (_input: RequestInfo | URL, init?: RequestInit & { proxy?: string }) => {
-        proxies.push(init?.proxy);
-        return new Response(null, { status: 204 });
+test.each([
+  'https://provider-proxy.example:8443',
+  'socks5://user:password@proxy.example:1080',
+  'http://fallback-primary.example:8080',
+])('the provider key and %s override reach OAuth fetch and socket transports', async (providerProxy) => {
+  const fixture = runtimeFixture({ kind: 'static' }, { providerId: 'configured-key' });
+  const serverHome = mkdtempSync(join(tmpdir(), 'aio-proxy-plugin-runtime-server-'));
+  homes.push(serverHome);
+  const originalFetch = globalThis.fetch;
+  const proxies: (string | undefined)[] = [];
+  globalThis.fetch = Object.assign(
+    async (_input: RequestInfo | URL, init?: RequestInit & { proxy?: string }) => {
+      proxies.push(init?.proxy);
+      return new Response(null, { status: 204 });
+    },
+    { preconnect: originalFetch.preconnect },
+  ) as typeof globalThis.fetch;
+  let runtimeFetch: RuntimeFetch | undefined;
+  let socketProxy: string | null | undefined;
+  const descriptor = definePlugin<unknown>((api) => {
+    api.oauth.register({
+      id: 'default',
+      displayName: 'Example',
+      account: { options: { schema: zod.object({}), form: [] } },
+      credentials: zod.object({ token: zod.string() }),
+      async login() {
+        throw new Error('not called');
       },
-      { preconnect: originalFetch.preconnect },
-    ) as typeof globalThis.fetch;
-    let runtimeFetch: RuntimeFetch | undefined;
-    let socketProxy: string | null | undefined;
-    const descriptor = definePlugin<unknown>((api) => {
-      api.oauth.register({
-        id: 'default',
-        displayName: 'Example',
-        account: { options: { schema: zod.object({}), form: [] } },
-        credentials: zod.object({ token: zod.string() }),
-        async login() {
-          throw new Error('not called');
+      catalog: {
+        policy: { kind: 'static' },
+        async discover() {
+          throw new Error('stored catalog should be used');
         },
-        catalog: {
-          policy: { kind: 'static' },
-          async discover() {
-            throw new Error('stored catalog should be used');
-          },
-        },
-        async createRuntime(context) {
-          runtimeFetch = context.fetch;
-          socketProxy = context.proxy;
-          return {
-            provider: {
-              specificationVersion: 'v4',
-              languageModel() {
-                throw new Error('not called');
-              },
-              imageModel() {
-                throw new Error('not called');
-              },
-              embeddingModel() {
-                throw new Error('not called');
-              },
+      },
+      async createRuntime(context) {
+        runtimeFetch = context.fetch;
+        socketProxy = context.proxy;
+        return {
+          provider: {
+            specificationVersion: 'v4',
+            languageModel() {
+              throw new Error('not called');
             },
-          } as never;
-        },
-      });
+            imageModel() {
+              throw new Error('not called');
+            },
+            embeddingModel() {
+              throw new Error('not called');
+            },
+          },
+        } as never;
+      },
     });
-    let state: Awaited<ReturnType<typeof createServerState>> | undefined;
-    try {
-      state = await createServerState({
-        config: ConfigSchema.parse({
-          proxy: 'https://global-proxy.example:8443',
-          providers: {
-            'configured-key': {
-              kind: 'oauth',
-              plugin: '@example/oauth',
-              capability: 'default',
-              proxy: providerProxy,
-            },
+  });
+  let state: Awaited<ReturnType<typeof createServerState>> | undefined;
+  try {
+    state = await createServerState({
+      config: ConfigSchema.parse({
+        proxy: 'https://global-proxy.example:8443',
+        proxyBackup: 'socks5://global-backup.example:1080',
+        proxyFallback: true,
+        providers: {
+          'configured-key': {
+            kind: 'oauth',
+            plugin: '@example/oauth',
+            capability: 'default',
+            proxy: providerProxy,
+            ...(providerProxy.includes('fallback-primary')
+              ? { proxyBackup: 'socks5://own-backup.example:1080', proxyFallback: true }
+              : {}),
           },
-        }),
-        dbHome: serverHome,
-        pluginRepository: fixture.repository,
-        builtIns: [{ packageName: '@example/oauth', version: '1.0.0', descriptor }],
-        pluginLogger: () => {},
-      });
+        },
+      }),
+      dbHome: serverHome,
+      pluginRepository: fixture.repository,
+      builtIns: [{ packageName: '@example/oauth', version: '1.0.0', descriptor }],
+      pluginLogger: () => {},
+    });
 
-      const snapshot = state.currentProviderSnapshot();
-      expect(snapshot.providers[0]?.id).toBe('configured-key');
-      expect(snapshot.providerStates?.get('configured-key')).toEqual({ status: 'ready', catalog: 'fresh' });
-      expect(snapshot.providerStates?.has('person')).toBe(false);
-      expect(snapshot.router.resolve('model')[0]?.provider.id).toBe('configured-key');
-      if (runtimeFetch === undefined) throw new Error('OAuth runtime fetch was not captured');
-      proxies.length = 0;
-      await runtimeFetch('https://oauth.example/token', { aioProxy: { traffic: 'control' } });
-      await runtimeFetch('https://oauth.example/models');
-      const nativeProxy = await resolveNativeProxyUrl(providerProxy);
-      expect(proxies).toEqual([nativeProxy, nativeProxy]);
-      expect(socketProxy).toBe(nativeProxy);
-    } finally {
-      state?.close();
-      globalThis.fetch = originalFetch;
-    }
-  },
-);
+    const snapshot = state.currentProviderSnapshot();
+    expect(snapshot.providers[0]?.id).toBe('configured-key');
+    expect(snapshot.providerStates?.get('configured-key')).toEqual({ status: 'ready', catalog: 'fresh' });
+    expect(snapshot.providerStates?.has('person')).toBe(false);
+    expect(snapshot.router.resolve('model')[0]?.provider.id).toBe('configured-key');
+    if (runtimeFetch === undefined) throw new Error('OAuth runtime fetch was not captured');
+    proxies.length = 0;
+    await runtimeFetch('https://oauth.example/token', { aioProxy: { traffic: 'control' } });
+    await runtimeFetch('https://oauth.example/models');
+    const nativeProxy = await resolveNativeProxyUrl(
+      providerProxy.includes('fallback-primary')
+        ? { primary: providerProxy, backup: 'socks5://own-backup.example:1080' }
+        : providerProxy,
+    );
+    expect(proxies).toEqual([nativeProxy, nativeProxy]);
+    expect(socketProxy).toBe(nativeProxy);
+  } finally {
+    state?.close();
+    globalThis.fetch = originalFetch;
+  }
+});
 
 test('a global proxy reload rebuilds an OAuth runtime that inherits the proxy', async () => {
   const fixture = runtimeFixture({ kind: 'static' }, { providerId: 'configured-key' });

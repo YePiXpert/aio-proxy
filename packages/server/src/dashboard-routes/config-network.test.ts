@@ -275,7 +275,11 @@ test('provider fallback saves independently, redacts credentials, and can switch
         body: JSON.stringify(value),
       });
     expect((await save(body)).status).toBe(200);
-    expect(onDisk(configPath).providers.api).toMatchObject(body);
+    expect(onDisk(configPath).providers.api).toMatchObject({
+      proxy: body.proxy,
+      proxyBackup: body.proxyBackup,
+      proxyFallback: true,
+    });
     const config = await routes.request('/config');
     expect(await config.text()).not.toContain('backup-secret');
     expect((await save({ ...body, proxyFallback: false })).status).toBe(200);
