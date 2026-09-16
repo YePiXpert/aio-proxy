@@ -1,5 +1,9 @@
 # @aio-proxy/cli-linux-x64
 
+## 0.24.0
+
+No changes in this release.
+
 ## 0.23.2
 
 No changes in this release.

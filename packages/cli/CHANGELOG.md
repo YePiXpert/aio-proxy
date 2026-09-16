@@ -1,5 +1,22 @@
 # @aio-proxy/cli
 
+## 0.24.0
+
+### Patch Changes
+
+- Updated dependencies [[`1cb5c9f`](https://github.com/aio-proxy/aio-proxy/commit/1cb5c9f3fc91c5e48ef673eb7be0b9971942386e), [`d50feb0`](https://github.com/aio-proxy/aio-proxy/commit/d50feb0764829686811aaff59b8134e47b493ea4), [`9de6d0e`](https://github.com/aio-proxy/aio-proxy/commit/9de6d0ec7fde99c9de87f993d3c1fb8f890690fe)]:
+  - @aio-proxy/plugin-sdk@0.24.0
+  - @aio-proxy/core@0.24.0
+  - @aio-proxy/server@0.24.0
+  - @aio-proxy/types@0.24.0
+  - @aio-proxy/i18n@0.24.0
+  - @aio-proxy/dashboard@0.24.0
+  - @aio-proxy/logger@0.24.0
+  - @aio-proxy/opencode-provider@0.24.0
+  - @aio-proxy/pi-provider@0.24.0
+  - @aio-proxy/agent-provider-runtime@0.24.0
+  - @aio-proxy/shared@0.24.0
+
 ## 0.23.2
 
 ### Patch Changes

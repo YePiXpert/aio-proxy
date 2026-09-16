@@ -1,5 +1,24 @@
 # @aio-proxy/server
 
+## 0.24.0
+
+### Minor Changes
+
+- [#370](https://github.com/aio-proxy/aio-proxy/pull/370) [`1cb5c9f`](https://github.com/aio-proxy/aio-proxy/commit/1cb5c9f3fc91c5e48ef673eb7be0b9971942386e) Thanks [@YePiXpert](https://github.com/YePiXpert)! - Discover Grok OAuth image and video models instead of filtering them from the account catalog. Support image generation/editing and video creation, polling, and content retrieval with the same account. Plugins can optionally declare a video catalog without exposing video-only models as chat models.
+
+- [#370](https://github.com/aio-proxy/aio-proxy/pull/370) [`d50feb0`](https://github.com/aio-proxy/aio-proxy/commit/d50feb0764829686811aaff59b8134e47b493ea4) Thanks [@YePiXpert](https://github.com/YePiXpert)! - Add authenticated SOCKS5 outbound proxies and optional primary/backup proxy fallback, disabled by default. Only providers set to inherit use the global policy; independent provider primary/backup settings and direct connections override it. Fallback switches only before a request is sent and never bypasses the proxies.
+
+### Patch Changes
+
+- [#370](https://github.com/aio-proxy/aio-proxy/pull/370) [`9de6d0e`](https://github.com/aio-proxy/aio-proxy/commit/9de6d0ec7fde99c9de87f993d3c1fb8f890690fe) Thanks [@YePiXpert](https://github.com/YePiXpert)! - Show image, embedding, and audio models alongside language models in the OAuth Provider editor, including after refreshing the catalog. Hidden models remain available to re-enable.
+- Updated dependencies [[`1cb5c9f`](https://github.com/aio-proxy/aio-proxy/commit/1cb5c9f3fc91c5e48ef673eb7be0b9971942386e), [`d50feb0`](https://github.com/aio-proxy/aio-proxy/commit/d50feb0764829686811aaff59b8134e47b493ea4)]:
+  - @aio-proxy/plugin-sdk@0.24.0
+  - @aio-proxy/core@0.24.0
+  - @aio-proxy/types@0.24.0
+  - @aio-proxy/i18n@0.24.0
+  - @aio-proxy/logger@0.24.0
+  - @aio-proxy/shared@0.24.0
+
 ## 0.23.2
 
 ### Patch Changes
