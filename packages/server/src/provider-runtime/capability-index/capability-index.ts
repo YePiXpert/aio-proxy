@@ -6,6 +6,7 @@ export type CapabilityIndexInput = {
   readonly catalog?: {
     readonly language?: readonly { readonly id: string }[];
     readonly image?: readonly { readonly id: string }[];
+    readonly video?: readonly { readonly id: string }[];
     readonly embedding?: readonly { readonly id: string }[];
     readonly speech?: readonly { readonly id: string }[];
     readonly transcription?: readonly { readonly id: string }[];
@@ -31,6 +32,7 @@ export type CapabilityIndexInput = {
 export function buildModelCapabilityIndex(input: CapabilityIndexInput): ModelCapabilityIndex {
   const languageIds = new Set((input.catalog?.language ?? []).map((descriptor) => descriptor.id));
   const imageIds = new Set((input.catalog?.image ?? []).map((descriptor) => descriptor.id));
+  const videoIds = new Set((input.catalog?.video ?? []).map((descriptor) => descriptor.id));
   const embeddingIds = new Set((input.catalog?.embedding ?? []).map((descriptor) => descriptor.id));
   const speechIds = new Set((input.catalog?.speech ?? []).map((descriptor) => descriptor.id));
   const transcriptionIds = new Set((input.catalog?.transcription ?? []).map((descriptor) => descriptor.id));
@@ -38,6 +40,7 @@ export function buildModelCapabilityIndex(input: CapabilityIndexInput): ModelCap
   const ids = new Set<string>([
     ...languageIds,
     ...imageIds,
+    ...videoIds,
     ...embeddingIds,
     ...speechIds,
     ...transcriptionIds,
@@ -49,6 +52,7 @@ export function buildModelCapabilityIndex(input: CapabilityIndexInput): ModelCap
     const capabilities = new Set<InboundCapability>();
     if (languageIds.has(id)) capabilities.add('language');
     if (imageIds.has(id)) capabilities.add('image');
+    if (videoIds.has(id)) capabilities.add('video');
     if (embeddingIds.has(id)) capabilities.add('embedding');
     // Unlike the protocol grant below, a catalog names each audio id's direction,
     // so speech and transcription are recorded separately rather than unioned.
@@ -68,7 +72,7 @@ export function buildModelCapabilityIndex(input: CapabilityIndexInput): ModelCap
     const imageOnly = imageIds.has(id) && !languageIds.has(id) && !embeddingIds.has(id);
     const catalogNonLanguage =
       !languageIds.has(id) &&
-      (imageIds.has(id) || embeddingIds.has(id) || speechIds.has(id) || transcriptionIds.has(id));
+      (videoIds.has(id) || imageIds.has(id) || embeddingIds.has(id) || speechIds.has(id) || transcriptionIds.has(id));
     if (finiteIds.has(id) && synthesizesLanguage(input) && !catalogNonLanguage) capabilities.add('language');
     if (finiteIds.has(id) && synthesizesEmbedding(input) && !imageOnly) capabilities.add('embedding');
     if (finiteIds.has(id) && protocolServed.has('speech')) capabilities.add('speech');

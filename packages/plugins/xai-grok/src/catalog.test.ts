@@ -6,7 +6,7 @@ import { discoverXAIGrokModels, initialXAIGrokCatalogFallback, XAIGrokCatalogErr
 import type { XAIGrokCredential } from './schema';
 
 describe('xAI Grok model catalog', () => {
-  test('discovers account models and excludes non-chat surfaces', async () => {
+  test('discovers language, image, and video models without advertising audio as chat', async () => {
     let request: Request | undefined;
     const catalog = await discoverXAIGrokModels(context(), {
       fetch: async (input, init) => {
@@ -15,6 +15,10 @@ describe('xAI Grok model catalog', () => {
           data: [
             { id: 'grok-4.5' },
             { id: 'grok-new', name: 'Grok New' },
+            { id: 'grok-imagine-image' },
+            { id: 'grok-imagine-image-2.0' },
+            { id: 'grok-imagine-video-1.5' },
+            { id: 'grok-imagine-video' },
             { id: 'grok-imagine-image' },
             { id: 'grok-stt-audio' },
             { id: 'grok-voice-live' },
@@ -30,6 +34,9 @@ describe('xAI Grok model catalog', () => {
       { id: 'grok-4.5', displayName: 'Grok 4.5', extra: { protocol: 'openai-response' } },
       { id: 'grok-new', displayName: 'Grok New', extra: { protocol: 'openai-response' } },
     ]);
+    expect(catalog.image.map(({ id }) => id)).toEqual(['grok-imagine-image', 'grok-imagine-image-2.0']);
+    expect(catalog.video?.map(({ id }) => id)).toEqual(['grok-imagine-video', 'grok-imagine-video-1.5']);
+    expect(catalog.video?.[0]?.modelMetadata?.capabilities?.modalities?.output).toEqual(['video']);
   });
 
   test('falls back only for retryable discovery failures', () => {

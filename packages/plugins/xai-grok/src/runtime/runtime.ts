@@ -1,10 +1,12 @@
 import { createOpenAI } from '@ai-sdk/openai';
+import { createXai } from '@ai-sdk/xai';
 import type { CredentialPort, OAuthRuntimeResult, RuntimeContext } from '@aio-proxy/plugin-sdk';
 
 import { createXAIGrokCLIHeaders, XAI_GROK_CLI_BASE_URL } from '../cli-headers/index';
 import { currentXAIGrokCredential, type XAIGrokFetch, type XAIGrokOAuthOptions } from '../oauth';
 import type { XAIGrokCredential } from '../schema';
 import { sanitizeXAIGrokResponsesBody } from './sanitize-responses/index';
+import { createXAIGrokVideoTransport } from './video';
 
 type CustomToolCompileContext = { grammarFallbackApplied: boolean };
 type OpenAIResponsesModel = ReturnType<ReturnType<typeof createOpenAI>['responses']>;
@@ -21,19 +23,32 @@ export async function createXAIGrokRuntime(
   options: XAIGrokOAuthOptions = {},
 ): Promise<OAuthRuntimeResult> {
   const fetch = options.fetch ?? context.fetch;
+  const dynamicFetch = createXAIGrokDynamicFetch(context.credentials, { ...options, fetch });
+  const xai = createXai({
+    apiKey: 'dynamic-credential',
+    fetch: ((input, init) => {
+      const url = new URL(input instanceof Request ? input.url : input.toString());
+      // Image URL downloads use the host fetch without adding OAuth credentials.
+      return url.origin === 'https://api.x.ai' ? dynamicFetch(input, init) : (fetch ?? globalThis.fetch)(input, init);
+    }) as typeof globalThis.fetch,
+  });
   const openai = createOpenAI({
     name: 'xai-grok-oauth',
     baseURL: XAI_GROK_CLI_BASE_URL,
     apiKey: 'dynamic-credential',
-    fetch: createXAIGrokDynamicFetch(context.credentials, { ...options, fetch }),
+    fetch: dynamicFetch,
   });
   return {
     provider: {
       specificationVersion: 'v4',
       languageModel: (modelId) => xaiCompatibleResponsesModel(openai.responses(modelId)),
       embeddingModel: () => unsupported('embedding'),
-      imageModel: () => unsupported('image generation'),
+      imageModel: (modelId) => xai.imageModel(modelId),
     },
+    raw: ({ protocol, modelId, capability }) =>
+      protocol === 'openai-video' && capability === undefined
+        ? createXAIGrokVideoTransport(dynamicFetch, modelId)
+        : undefined,
   };
 }
 

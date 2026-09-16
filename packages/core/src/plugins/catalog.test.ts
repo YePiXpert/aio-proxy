@@ -131,3 +131,10 @@ test('drops a modelMetadata that smuggles non-JSON values through a nested loose
   });
   expect(catalog.language[0]?.modelMetadata).toBeUndefined();
 });
+
+test('preserves an optional video catalog and rejects malformed video descriptors', () => {
+  const catalog = { ...validCatalog(), video: [{ id: 'grok-imagine-video', extra: { endpoint: 'videos' } }] };
+  expect(validateModelCatalog(catalog)).toEqual(catalog);
+  expect(() => validateModelCatalog({ ...validCatalog(), video: null })).toThrow(ModelCatalogValidationError);
+  expect(() => validateModelCatalog({ ...validCatalog(), video: [{ id: ' ' }] })).toThrow(ModelCatalogValidationError);
+});

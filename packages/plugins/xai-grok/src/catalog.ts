@@ -5,7 +5,7 @@ import type { XAIGrokCredential } from './schema';
 
 export const XAI_GROK_CATALOG_TTL_MS = 6 * 60 * 60_000;
 const MODELS_URL = 'https://api.x.ai/v1/models';
-const NON_CHAT_PREFIXES = ['grok-imagine-', 'grok-stt-', 'grok-voice-'] as const;
+const NON_CHAT_PREFIXES = ['grok-stt-', 'grok-voice-'] as const;
 const MODEL_METADATA = { protocol: 'openai-response' } as const;
 const CURATED = [
   ['grok-build', 'Grok Build'],
@@ -57,6 +57,8 @@ export async function discoverXAIGrokModels(
   }
   const data = readData(payload);
   const byId = new Map<string, ModelCatalog['language'][number]>();
+  const images = new Map<string, ModelCatalog['language'][number]>();
+  const videos = new Map<string, ModelCatalog['language'][number]>();
   for (const value of data) {
     if (typeof value !== 'object' || value === null) continue;
     const rawId = Reflect.get(value, 'id');
@@ -65,9 +67,24 @@ export async function discoverXAIGrokModels(
     if (!id.startsWith('grok-') || NON_CHAT_PREFIXES.some((prefix) => id.startsWith(prefix))) continue;
     const name = Reflect.get(value, 'name');
     const displayName = curatedNames.get(id) ?? readDisplayName(name);
+    const media = id.startsWith('grok-imagine-image')
+      ? 'image'
+      : id.startsWith('grok-imagine-video')
+        ? 'video'
+        : undefined;
+    if (media !== undefined) {
+      (media === 'image' ? images : videos).set(id, {
+        id,
+        ...(displayName === undefined ? {} : { displayName }),
+        modelMetadata: { capabilities: { modalities: { input: ['text', 'image'], output: [media] } } },
+      });
+      continue;
+    }
+    if (id.startsWith('grok-imagine-')) continue;
     byId.set(id, { id, ...(displayName === undefined ? {} : { displayName }), extra: MODEL_METADATA });
   }
-  return emptyCatalog([...byId.values()].sort((left, right) => left.id.localeCompare(right.id)));
+  const sorted = (models: typeof byId) => [...models.values()].sort((left, right) => left.id.localeCompare(right.id));
+  return { ...emptyCatalog(sorted(byId)), image: sorted(images), video: sorted(videos) };
 }
 
 export function initialXAIGrokCatalogFallback(error: unknown): ModelCatalog | undefined {
