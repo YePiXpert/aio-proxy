@@ -297,12 +297,12 @@ router:
 Images 说明：
 
 - 原始透传 Images 需要 `openai-image` 端点（或将其设为主协议）。
-- JSON 中留空的 `model` 以及 multipart 中缺失/空/仅空白的 `model` 会查找 `gpt-image-2`（不是官方的 `dall-e-2` / `gpt-image-1.5`）。multipart 字面量 `null` 是模型 id `"null"`，不会被默认化。原始透传会写入解析后的候选 id。
+- JSON 中缺失/null/空/仅空白的 `model` 以及 multipart 中缺失/空/仅空白的 `model` 会查找 `gpt-image-2.5-sunburst`。显式指定的模型 id（包括 `gpt-image-2` 和 `gpt-image-2.5-flare`）沿用原有路由。multipart 字面量 `null` 是模型 id `"null"`，不会被默认化。原始透传会写入解析后的候选 id。
 - 入站模型是 OpenAI id，外加现有的 `providerId/` 限定符。
 - 转换路径不流式输出，也不会去拉取 `image_url`。
 - DALL·E 省略/`null`/`url` 会跳过转换；GPT Image 省略时编码为 `b64_json`；自定义模型省略时的 `b64_json` 是 aio-proxy 扩展。
 - Edits 接受官方上限信封（JSON `357_564_416`，multipart `851_048_559`）。P1 没有更低的默认 DoS 上限；未来更小的上限只能作为显式的部署扩展。
-- 无目录的 Images Provider 需要有限 id 集合（`models` 或保留的别名目标），其中须包含 `gpt-image-2` 才能使用空白 model 的默认值。`router.models` 元数据条目不会创建路由。
+- 无目录的 Images Provider 需要有限 id 集合（`models` 或保留的别名目标），其中须包含 `gpt-image-2.5-sunburst` 才能使用空白 model 的默认值。仅配置了 `gpt-image-2` 的 Provider 需要添加新模型，或由客户端显式请求旧模型。`router.models` 元数据条目不会创建路由。
 
 Audio 说明：
 
