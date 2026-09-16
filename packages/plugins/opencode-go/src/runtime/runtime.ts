@@ -84,16 +84,18 @@ export async function createOpenCodeGoRuntime(
           const target = new URL(rawPath(input.protocol), `${OPENCODE_GO_BASE_URL}/`);
           const headers = sanitizeRawHeaders(request.headers);
           headers.set('authorization', `Bearer ${value.apiKey}`);
+          headers.set('accept-encoding', 'identity');
           if (!headers.has('x-opencode-session') && requestContext?.session.key !== undefined) {
             headers.set('x-opencode-session', requestContext.session.key);
           }
-          return await fetch(target, {
+          const response = await fetch(target, {
             method: request.method,
             headers,
             ...(request.method === 'GET' || request.method === 'HEAD' ? {} : { body: request.body }),
             signal: request.signal,
             redirect: request.redirect,
           });
+          return new Response(response.body, decodedRawResponseInit(response));
         },
       };
     },
@@ -131,6 +133,7 @@ function sanitizeRawHeaders(source: Headers): Headers {
     'proxy-authorization',
     'cookie',
     'host',
+    'accept-encoding',
     'x-api-key',
     'x-goog-api-key',
     'anthropic-api-key',
@@ -138,6 +141,17 @@ function sanitizeRawHeaders(source: Headers): Headers {
     headers.delete(key);
   }
   return headers;
+}
+
+function decodedRawResponseInit(response: Response): ResponseInit {
+  const headers = new Headers(response.headers);
+  headers.delete('content-encoding');
+  headers.delete('content-length');
+  return {
+    headers,
+    status: response.status,
+    statusText: response.statusText,
+  };
 }
 
 function catalogProtocol(extra: unknown): ProtocolId | undefined {

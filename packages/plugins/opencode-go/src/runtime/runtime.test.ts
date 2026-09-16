@@ -114,6 +114,7 @@ test('raw same-protocol passthrough rewrites the Go URL and session header', asy
         cookie: 'session=client-secret',
         'proxy-authorization': 'Basic client-secret',
         'x-api-key': 'client-secret',
+        'accept-encoding': 'gzip, deflate, br, zstd',
       },
       body: '{}',
     }),
@@ -124,6 +125,7 @@ test('raw same-protocol passthrough rewrites the Go URL and session header', asy
   );
   expect(calls[0]?.url).toBe('https://opencode.ai/zen/go/v1/chat/completions');
   expect(calls[0]?.headers.get('authorization')).toBe('Bearer sk-opencode-go');
+  expect(calls[0]?.headers.get('accept-encoding')).toBe('identity');
   expect(calls[0]?.headers.get('x-opencode-session')).toBe('sha256:session');
   for (const name of 'host cookie proxy-authorization x-api-key'.split(' ')) {
     expect(calls[0]?.headers.get(name)).toBeNull();
@@ -135,6 +137,34 @@ test('raw same-protocol passthrough rewrites the Go URL and session header', asy
       capability: 'language',
     }),
   ).toBeUndefined();
+});
+
+test('raw passthrough drops stale decompression headers from the upstream response', async () => {
+  const runtime = await createOpenCodeGoRuntime({
+    ...runtimeContext(),
+    fetch: async () =>
+      new Response('{"ok":true}', {
+        status: 200,
+        headers: {
+          'content-encoding': 'gzip',
+          'content-length': '32',
+          'content-type': 'application/json',
+        },
+      }),
+  });
+  const transport = runtime.raw?.({
+    protocol: 'openai-compatible',
+    modelId: 'kimi-k3',
+    capability: 'language',
+    requestPath: '/v1/chat/completions',
+  });
+  const response = await transport!.invoke(
+    new Request('http://127.0.0.1:9317/v1/chat/completions', { method: 'POST', body: '{}' }),
+  );
+  expect(response.headers.get('content-encoding')).toBeNull();
+  expect(response.headers.get('content-length')).toBeNull();
+  expect(response.headers.get('content-type')).toBe('application/json');
+  expect(await response.text()).toBe('{"ok":true}');
 });
 
 test('injects the durable Bearer key and preserves the abort signal', async () => {
