@@ -27,6 +27,7 @@ describe('plugin add', () => {
         '@aio-proxy/plugin-kimi-code',
         '@aio-proxy/plugin-muse-code',
         '@aio-proxy/plugin-openai-chatgpt',
+        '@aio-proxy/plugin-opencode-go',
         '@aio-proxy/plugin-openrouter',
         '@aio-proxy/plugin-xai-grok',
       ]);
