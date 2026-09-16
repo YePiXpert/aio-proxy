@@ -13,9 +13,11 @@ import { isPlainObject } from 'es-toolkit/predicate';
 
 import { oauthExposedModels } from '../../plugin-runtime';
 import { effectiveProxy, materializeProviders } from '../../provider-runtime';
+import { supportsImage, supportsLanguage } from '../../provider-runtime/capability-index';
 import { withAttemptLogContext, withRequestLogContext } from '../../request-logging';
 import type { RuntimeProviderInstance } from '../../runtime';
 import type { ServerState } from '../../server-state';
+import { testProviderImage } from './provider-draft-image';
 
 export { resolveProviderDraft } from './provider-draft-resolution';
 
@@ -213,7 +215,7 @@ async function testOAuthProvider(
   try {
     const runtime = lease.snapshot.providers.find((candidate) => candidate.id === provider.id);
     const transport = runtime?.model;
-    if (runtime === undefined || transport === undefined) return failure('test_request_failed');
+    if (runtime === undefined) return failure('test_request_failed');
     // Stored catalog, not `runtime.upstreamMetadata`: materialization already
     // subtracts the *saved* denylist from metadata, so a draft that re-enables a
     // hidden id would otherwise look undiscovered and return model_not_enabled.
@@ -223,6 +225,17 @@ async function testOAuthProvider(
     if (!new Set(oauthExposedModels(catalogIds, provider.excludedModels)).has(modelId)) {
       return failure('model_not_enabled');
     }
+    if (supportsImage(runtime.capabilityIndex, modelId) && !supportsLanguage(runtime.capabilityIndex, modelId)) {
+      const passed = await withDraftAttempt(
+        provider,
+        modelId,
+        ProviderProtocol.OpenAIImage,
+        () => testProviderImage(runtime, modelId),
+        ProviderProtocol.OpenAIImage,
+      );
+      return passed ? { ok: true } : failure('test_request_failed');
+    }
+    if (transport === undefined) return failure('test_request_failed');
     const passed = await withDraftAttempt(provider, modelId, transport.targetProtocol?.(modelId), async () => {
       await transport.ensureAvailable?.();
       const signal = AbortSignal.timeout(10_000);
@@ -272,9 +285,10 @@ function withDraftAttempt<T>(
   modelId: string,
   targetProtocol: ProviderProtocol | undefined,
   operation: () => Promise<T>,
+  sourceProtocol = provider.kind === ProviderKind.Api
+    ? apiProviderEndpoints(provider)[0].protocol
+    : ProviderProtocol.OpenAIResponse,
 ): Promise<T> {
-  const sourceProtocol =
-    provider.kind === ProviderKind.Api ? apiProviderEndpoints(provider)[0].protocol : ProviderProtocol.OpenAIResponse;
   return withRequestLogContext({ requestId: crypto.randomUUID(), debug: false, logger: () => {} }, () =>
     withAttemptLogContext(
       {

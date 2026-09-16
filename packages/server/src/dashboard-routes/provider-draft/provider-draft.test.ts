@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -11,6 +11,7 @@ import { ConfigSchema, ProviderProtocol } from '@aio-proxy/types';
 import { createServerState } from '#server-test-lifecycle';
 
 import { disabledDashboardAuthentication } from '../../dashboard-auth/test-support';
+import type { InboundCapability, RuntimeProviderInstance } from '../../runtime';
 import type { ServerState } from '../../server-state';
 import { createDashboardRoutes } from '../config';
 import { resolveProviderDraft } from './provider-draft-operations';
@@ -1361,3 +1362,157 @@ function seedOAuthCatalog(
   });
   repository.completeAccountOperation(operation.operationId);
 }
+
+describe('oauth image model tests', () => {
+  const modelId = 'gpt-image-2.5-sunburst';
+  const request = (excludedModels: readonly string[] = []) =>
+    jsonRequest({
+      draft: { kind: 'oauth', id: 'images', enabled: true, excludedModels },
+      persistedProviderId: 'images',
+      model: modelId,
+    });
+
+  async function withImageProvider(
+    transports: Partial<Pick<RuntimeProviderInstance, 'raw' | 'image' | 'model'>>,
+    run: (routes: ReturnType<typeof createDashboardRoutes>) => Promise<void>,
+    capabilities: readonly InboundCapability[] = ['image'],
+  ) {
+    const directory = mkdtempSync(join(tmpdir(), 'aio-image-draft-'));
+    const state = await createServerState({
+      config: ConfigSchema.parse({
+        providers: { images: { kind: 'oauth', plugin: '@example/images', capability: 'default' } },
+      }),
+      dbHome: directory,
+      providerInstances: [
+        {
+          id: 'images',
+          kind: 'oauth',
+          enabled: true,
+          models: [modelId],
+          capabilityIndex: { [modelId]: new Set(capabilities) },
+          upstreamMetadata: { [modelId]: { capabilities: { modalities: { output: ['image'] } } } },
+          ...transports,
+        } as RuntimeProviderInstance,
+      ],
+    });
+    try {
+      await run(createDashboardRoutes(state, disabledDashboardAuthentication));
+    } finally {
+      state.close();
+      rmSync(directory, { force: true, recursive: true });
+    }
+  }
+
+  test('sends an image request to raw transport instead of the chat or SDK transport', async () => {
+    const chat = mock(async function* () {
+      yield { type: 'text-delta' as const, delta: '' };
+    });
+    const image = mock(async () => ({ images: [new Uint8Array([1])] }));
+    const invoke = mock(async (req: Request) => {
+      expect(new URL(req.url).pathname).toBe('/v1/images/generations');
+      expect(req.method).toBe('POST');
+      expect(req.signal.aborted).toBe(false);
+      expect(await req.json()).toEqual({
+        model: modelId,
+        prompt: expect.any(String),
+        n: 1,
+        response_format: 'b64_json',
+        stream: false,
+      });
+      return Response.json({ data: [{ b64_json: 'AQ==' }] });
+    });
+    const resolve = mock(() => ({ invoke }));
+    await withImageProvider({ raw: { resolve }, image: { invoke: image }, model: { invoke: chat } }, async (routes) => {
+      const response = await routes.request('/providers/draft/test', request());
+      expect(await response.json()).toEqual({ ok: true });
+    });
+    expect(resolve).toHaveBeenCalledWith({
+      protocol: ProviderProtocol.OpenAIImage,
+      modelId,
+      requestPath: '/v1/images/generations',
+    });
+    expect(invoke).toHaveBeenCalledTimes(1);
+    expect(chat).not.toHaveBeenCalled();
+    expect(image).not.toHaveBeenCalled();
+  });
+
+  test('can test an image-only runtime with no language transport', async () => {
+    const invoke = mock(async () => Response.json({ data: [{ url: 'https://images.example/test.png' }] }));
+    await withImageProvider({ raw: { resolve: () => ({ invoke }) } }, async (routes) => {
+      expect(await (await routes.request('/providers/draft/test', request())).json()).toEqual({ ok: true });
+    });
+    expect(invoke).toHaveBeenCalledTimes(1);
+  });
+
+  test('uses the SDK image capability when no matching raw transport exists', async () => {
+    const ready = mock(async () => {});
+    const invoke = mock(async () => ({ images: [new Uint8Array([1])] }));
+    await withImageProvider({ image: { ensureAvailable: ready, invoke } }, async (routes) => {
+      expect(await (await routes.request('/providers/draft/test', request())).json()).toEqual({ ok: true });
+    });
+    expect(ready).toHaveBeenCalledTimes(1);
+    expect(invoke).toHaveBeenCalledWith({
+      modelId,
+      invocation: { operation: 'generate', prompt: expect.any(String), n: 1, responseFormat: 'b64_json' },
+      signal: expect.any(AbortSignal),
+    });
+  });
+
+  test.each([
+    () => Response.json({ error: { message: 'rejected' } }, { status: 400 }),
+    () => Response.json({ data: [] }),
+    () => Response.json({ data: [{ b64_json: '' }] }),
+    () => Response.json({ error: { message: 'generation failed' } }),
+    () => new Response('data: {"error":"failed"}'),
+    () => {
+      throw new Error('network failure');
+    },
+  ])('reports failed or missing image output without falling back to chat', async (response) => {
+    const image = mock(async () => ({ images: [new Uint8Array([1])] }));
+    await withImageProvider(
+      { raw: { resolve: () => ({ invoke: async () => response() }) }, image: { invoke: image } },
+      async (routes) => {
+        expect(await (await routes.request('/providers/draft/test', request())).json()).toEqual({
+          ok: false,
+          error: { code: 'test_request_failed', recoverable: true },
+        });
+      },
+    );
+    expect(image).not.toHaveBeenCalled();
+  });
+
+  test('keeps the lightweight chat probe for models that also support language', async () => {
+    const chat = mock(async function* () {
+      yield { type: 'text-delta' as const, delta: 'pong' };
+    });
+    const image = mock(async () => ({ images: [new Uint8Array([1])] }));
+    await withImageProvider(
+      { model: { invoke: chat }, image: { invoke: image } },
+      async (routes) => {
+        expect(await (await routes.request('/providers/draft/test', request())).json()).toEqual({ ok: true });
+      },
+      ['language', 'image'],
+    );
+    expect(chat).toHaveBeenCalledTimes(1);
+    expect(image).not.toHaveBeenCalled();
+  });
+
+  test('an SDK image request with no generated bytes fails the test', async () => {
+    await withImageProvider({ image: { invoke: async () => ({ images: [new Uint8Array()] }) } }, async (routes) => {
+      expect(await (await routes.request('/providers/draft/test', request())).json()).toMatchObject({
+        ok: false,
+        error: { code: 'test_request_failed' },
+      });
+    });
+  });
+
+  test('does not generate an image for a model hidden by the draft', async () => {
+    const invoke = mock(async () => Response.json({ data: [{ b64_json: 'AQ==' }] }));
+    await withImageProvider({ raw: { resolve: () => ({ invoke }) } }, async (routes) => {
+      expect(await (await routes.request('/providers/draft/test', request([modelId]))).json()).toMatchObject({
+        error: { code: 'model_not_enabled' },
+      });
+    });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+});
