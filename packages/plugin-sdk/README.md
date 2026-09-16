@@ -33,6 +33,7 @@ const catalog: ModelCatalog = {
     },
   ],
   image: [],
+  video: [], // Optional; served by a plugin raw resolver for openai-video.
   embedding: [],
   speech: [],
   transcription: [],

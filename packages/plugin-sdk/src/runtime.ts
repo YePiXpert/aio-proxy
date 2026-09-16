@@ -118,6 +118,8 @@ export type ModelDescriptor = {
 export type ModelCatalog = {
   readonly language: readonly ModelDescriptor[];
   readonly image: readonly ModelDescriptor[];
+  /** Video models served through the openai-video raw transport. Optional for older plugins. */
+  readonly video?: readonly ModelDescriptor[];
   readonly embedding: readonly ModelDescriptor[];
   readonly speech: readonly ModelDescriptor[];
   readonly transcription: readonly ModelDescriptor[];

@@ -10,6 +10,7 @@ import {
   supportsLanguage,
   supportsSpeech,
   supportsTranscription,
+  supportsVideo,
 } from '../provider-runtime/capability-index';
 import { createRuntimeProvider, withAccountPin, withRoutingConfig } from './capabilities';
 import { PluginRawResolverError, PluginRawTransportError, validatePluginProtocolMap } from './index';
@@ -861,3 +862,36 @@ test('withAccountPin stamps the account identity used to route a later sideband'
   expect(provider.accountId).toBe('person@example.com');
   expect(provider.runtimeRevision).toBe(7);
 });
+
+test.each([false, true])(
+  'OAuth video catalogs resolve raw video without granting chat (language: %s)',
+  async (withLanguage) => {
+    const videoCatalog = {
+      ...catalog,
+      language: withLanguage ? catalog.language : [],
+      video: [{ id: 'grok-imagine-video', extra: { media: 'video' } }],
+    };
+    let extra: unknown;
+    const fixture = runtimeFixture(
+      { kind: 'static' },
+      {
+        catalog: videoCatalog,
+        createRuntime: async () => ({
+          provider: providerV4(),
+          raw: (input: Parameters<RawResolver>[0]) => {
+            extra = input.extra;
+            return input.protocol === 'openai-video' ? { invoke: async () => Response.json({ id: 'job' }) } : undefined;
+          },
+        }),
+      },
+    );
+    const { provider } = await materializeFixture(fixture);
+    expect(provider?.models).toEqual(withLanguage ? ['model', 'grok-imagine-video'] : ['grok-imagine-video']);
+    if (!withLanguage) expect(provider?.model).toBeUndefined();
+    expect(supportsVideo(provider!.capabilityIndex, 'grok-imagine-video')).toBe(true);
+    expect(supportsLanguage(provider!.capabilityIndex, 'grok-imagine-video')).toBe(false);
+    const raw = provider?.raw?.resolve({ protocol: ProviderProtocol.OpenAIVideo, modelId: 'grok-imagine-video' });
+    expect(raw).toBeDefined();
+    expect(extra).toEqual({ media: 'video' });
+  },
+);

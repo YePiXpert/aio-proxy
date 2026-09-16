@@ -3,7 +3,7 @@ import { isRecord } from '@aio-proxy/shared';
 import { ModelMetadataSchema } from '@aio-proxy/types';
 import { z } from 'zod';
 
-const MODALITIES = ['language', 'image', 'embedding', 'speech', 'transcription', 'reranking'] as const;
+const MODALITIES = ['language', 'image', 'embedding', 'speech', 'transcription', 'reranking', 'video'] as const;
 type Modality = (typeof MODALITIES)[number];
 
 export class ModelCatalogValidationError extends Error {
@@ -106,7 +106,7 @@ export function validateModelCatalog(value: unknown): ModelCatalog {
     throw new ModelCatalogValidationError('language', -1, []);
   }
   const record = value;
-  const { language, image, embedding, speech, transcription, reranking, extra } = record;
+  const { language, image, embedding, speech, transcription, reranking, video, extra } = record;
   if (extra !== undefined && !isJsonValue(extra)) {
     throw new ModelCatalogValidationError('language', -1, ['extra']);
   }
@@ -117,6 +117,7 @@ export function validateModelCatalog(value: unknown): ModelCatalog {
     speech: validateDescriptors('speech', speech),
     transcription: validateDescriptors('transcription', transcription),
     reranking: validateDescriptors('reranking', reranking),
+    ...(video === undefined ? {} : { video: validateDescriptors('video', video) }),
     ...(extra === undefined ? {} : { extra }),
   };
 }
