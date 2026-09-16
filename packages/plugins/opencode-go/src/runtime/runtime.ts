@@ -82,8 +82,7 @@ export async function createOpenCodeGoRuntime(
           }
           const { value } = await context.credentials.read();
           const target = new URL(rawPath(input.protocol), `${OPENCODE_GO_BASE_URL}/`);
-          const headers = new Headers(request.headers);
-          headers.delete('authorization');
+          const headers = sanitizeRawHeaders(request.headers);
           headers.set('authorization', `Bearer ${value.apiKey}`);
           if (!headers.has('x-opencode-session') && requestContext?.session.key !== undefined) {
             headers.set('x-opencode-session', requestContext.session.key);
@@ -123,6 +122,22 @@ export function createOpenCodeGoDynamicFetch(
     });
   };
   return Object.assign(dynamicFetch, { preconnect: fetch.preconnect });
+}
+
+function sanitizeRawHeaders(source: Headers): Headers {
+  const headers = new Headers(source);
+  for (const key of [
+    'authorization',
+    'proxy-authorization',
+    'cookie',
+    'host',
+    'x-api-key',
+    'x-goog-api-key',
+    'anthropic-api-key',
+  ]) {
+    headers.delete(key);
+  }
+  return headers;
 }
 
 function catalogProtocol(extra: unknown): ProtocolId | undefined {

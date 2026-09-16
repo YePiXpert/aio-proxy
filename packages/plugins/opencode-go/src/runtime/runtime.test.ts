@@ -90,11 +90,11 @@ test('routes Anthropic Messages and OpenAI Responses to the matching Go paths', 
 });
 
 test('raw same-protocol passthrough rewrites the Go URL and session header', async () => {
-  const calls: Request[] = [];
+  const calls: { url: string; headers: Headers }[] = [];
   const runtime = await createOpenCodeGoRuntime({
     ...runtimeContext(),
     fetch: async (input, init) => {
-      calls.push(new Request(input, init));
+      calls.push({ url: String(input), headers: new Headers(init?.headers) });
       return new Response('{}', { status: 200 });
     },
   });
@@ -105,13 +105,29 @@ test('raw same-protocol passthrough rewrites the Go URL and session header', asy
     requestPath: '/v1/chat/completions',
   });
   expect(transport).toBeDefined();
-  await transport!.invoke(new Request('http://127.0.0.1:9317/v1/chat/completions', { method: 'POST', body: '{}' }), {
-    requestId: 'req-1',
-    session: { key: 'sha256:session', source: 'header-session' },
-  });
+  await transport!.invoke(
+    new Request('http://127.0.0.1:9317/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        host: '127.0.0.1:9317',
+        authorization: 'Bearer client-secret',
+        cookie: 'session=client-secret',
+        'proxy-authorization': 'Basic client-secret',
+        'x-api-key': 'client-secret',
+      },
+      body: '{}',
+    }),
+    {
+      requestId: 'req-1',
+      session: { key: 'sha256:session', source: 'header-session' },
+    },
+  );
   expect(calls[0]?.url).toBe('https://opencode.ai/zen/go/v1/chat/completions');
   expect(calls[0]?.headers.get('authorization')).toBe('Bearer sk-opencode-go');
   expect(calls[0]?.headers.get('x-opencode-session')).toBe('sha256:session');
+  for (const name of 'host cookie proxy-authorization x-api-key'.split(' ')) {
+    expect(calls[0]?.headers.get(name)).toBeNull();
+  }
   expect(
     runtime.raw?.({
       protocol: 'anthropic',
