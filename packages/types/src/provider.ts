@@ -60,19 +60,19 @@ export const ConfigTemplateStringSchema = z.string().regex(/\{\{[\s\S]*\}\}/u, '
 
 export const HttpProxyUrlSchema = z.url().refine((value) => {
   try {
-    const protocol = new URL(value).protocol;
-    return protocol === 'http:' || protocol === 'https:';
+    const url = new URL(value);
+    return ['http:', 'https:', 'socks:', 'socks5:', 'socks5h:'].includes(url.protocol) && url.hostname !== '';
   } catch {
     return false;
   }
-}, 'Proxy URL must use http: or https:');
+}, 'Proxy URL must use http:, https:, socks:, socks5:, or socks5h:');
 
 export const ProviderProxySchema = z.union([HttpProxyUrlSchema, z.literal(false)]).optional();
 export const ProviderMutationProxySchema = ProviderProxySchema.nullable();
 const AuthoringProviderProxySchema = z
   .union([HttpProxyUrlSchema, ConfigTemplateStringSchema, z.literal(false)])
   .optional();
-const PROXY_DESCRIPTION = 'HTTP(S) proxy URL; inherits the top-level proxy when omitted, false disables it.';
+const PROXY_DESCRIPTION = 'HTTP(S) or SOCKS5 proxy URL; inherits the top-level proxy when omitted, false disables it.';
 
 const ApiHeadersSchema = z
   .record(z.string(), z.string())

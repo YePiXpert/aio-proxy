@@ -555,7 +555,7 @@
       "api_keys_remove": "키 {label} 제거",
       "api_keys_unnamed": "(라벨 없음)",
       "api_keys_save": "키 저장",
-      "default_proxy": "기본 HTTP(S) 프록시",
+      "default_proxy": "기본 HTTP(S) / SOCKS5 프록시",
       "proxy_placeholder_configured": "설정됨(새 URL을 입력하여 교체)",
       "proxy_placeholder_empty": "http://proxy.example:8080",
       "proxy_description": "별도 프록시가 없는 프로바이더는 이 값을 상속합니다.",

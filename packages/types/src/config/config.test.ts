@@ -239,8 +239,8 @@ test('resolves top-level and per-provider proxy plus API headers on the runtime 
   expect(runtime.providers[1]).toMatchObject({ proxy: 'http://provider-proxy.example:8080' });
 });
 
-test('rejects a non-HTTP(S) top-level proxy scheme', () => {
-  expect(ConfigSchema.safeParse({ proxy: 'socks5://localhost:1080', providers: {} }).success).toBe(false);
+test('rejects an unsupported top-level proxy scheme', () => {
+  expect(ConfigSchema.safeParse({ proxy: 'ftp://localhost:1080', providers: {} }).success).toBe(false);
 });
 
 test('degrades an API provider with an invalid header name instead of failing the whole config', () => {
@@ -436,4 +436,9 @@ test.each([
 
 test('dashboard OAuth patches retain transforms', () => {
   expect(DashboardOAuthProviderPatchSchema.parse({ enabled: true, transforms }).transforms).toEqual(transforms);
+});
+
+test.each(['socks', 'socks5', 'socks5h'])('accepts %s proxies in runtime config', (scheme) => {
+  const proxy = `${scheme}://user:password@localhost:1080`;
+  expect(ConfigSchema.parse({ proxy, providers: {} }).proxy).toBe(proxy);
 });

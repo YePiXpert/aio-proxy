@@ -58,7 +58,7 @@ const DashboardHttpProxyTemplateSchema = ConfigTemplateStringSchema.pipe(
     .refine(hasOnlySupportedConfigTemplates, 'Unsupported config template')
     .refine(
       (value) => HttpProxyUrlSchema.safeParse(materializeProxyTemplate(value)).success,
-      'Proxy template must have a valid http: or https: URL shape',
+      'Proxy template must have a valid HTTP(S) or SOCKS5 URL shape',
     ),
 );
 

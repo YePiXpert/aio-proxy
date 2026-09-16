@@ -555,7 +555,7 @@
       "api_keys_remove": "Remove key {label}",
       "api_keys_unnamed": "without a label",
       "api_keys_save": "Save keys",
-      "default_proxy": "Default HTTP(S) proxy",
+      "default_proxy": "Default HTTP(S) / SOCKS5 proxy",
       "proxy_placeholder_configured": "Configured (enter a new URL to replace)",
       "proxy_placeholder_empty": "http://proxy.example:8080",
       "proxy_description": "Providers without their own proxy inherit this value.",

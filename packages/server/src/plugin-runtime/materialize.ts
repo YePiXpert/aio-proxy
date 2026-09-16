@@ -1,4 +1,4 @@
-import { pluginDefaultAliases, type StoredCatalog, validateModelCatalog } from '@aio-proxy/core';
+import { resolveNativeProxyUrl, pluginDefaultAliases, type StoredCatalog, validateModelCatalog } from '@aio-proxy/core';
 import type { AccountContext, CredentialPort } from '@aio-proxy/plugin-sdk';
 import { type Diagnostic, providerLoginCommand } from '@aio-proxy/types';
 
@@ -116,13 +116,13 @@ async function createRuntimeMaterialization(
   const fetch = options.runtimeFetch ?? globalThis.fetch;
   try {
     const result = await runtimeDeadline(
-      Promise.resolve().then(() =>
+      Promise.resolve().then(async () =>
         adapter.createRuntime({
           credentials: credentials as never,
           options: accountOptions,
           catalog: storedCatalog.catalog,
           fetch,
-          proxy: runtime.proxy,
+          proxy: runtime.proxy === null ? null : await resolveNativeProxyUrl(runtime.proxy),
         }),
       ),
     );

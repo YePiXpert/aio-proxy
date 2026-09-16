@@ -407,7 +407,9 @@ Set `server.password` to protect the Dashboard. It does not protect model API en
 
 ## Network and security
 
-Set the top-level `proxy` to configure a default HTTP(S) proxy. A Provider can inherit it, override it, or disable it with `false`. An `api` Provider can also set upstream request headers through `headers`.
+Set the top-level `proxy` to configure a default HTTP(S) / SOCKS5 proxy. A Provider can inherit it, override it, or disable it with `false`. An `api` Provider can also set upstream request headers through `headers`.
+
+SOCKS5 accepts `socks://`, `socks5://`, and `socks5h://` URLs, optionally with percent-encoded username/password (for example, `socks5://user:password@127.0.0.1:1080`). All three use remote DNS; the default port is 1080. This applies to model requests, OAuth traffic, and plugin realtime connections.
 
 By default AIO Proxy binds to `127.0.0.1`. Set `server.host` to another non-empty host (for example, `0.0.0.0`) when clients need remote access. The proxy serves HTTP only, so terminate TLS with a reverse proxy, tunnel, or gateway before exposing it beyond a trusted network. Add `server.apiKeys` before doing so:
 

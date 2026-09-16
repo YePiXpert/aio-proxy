@@ -555,7 +555,7 @@
       "api_keys_remove": "キー {label} を削除",
       "api_keys_unnamed": "（ラベルなし）",
       "api_keys_save": "キーを保存",
-      "default_proxy": "既定の HTTP(S) プロキシ",
+      "default_proxy": "既定の HTTP(S) / SOCKS5 プロキシ",
       "proxy_placeholder_configured": "設定済み（新しい URL を入力して置換）",
       "proxy_placeholder_empty": "http://proxy.example:8080",
       "proxy_description": "個別のプロキシがないプロバイダーはこの値を継承します。",

@@ -51,9 +51,9 @@ describe('dashboard settings control-plane contracts', () => {
     const mutation = schema('DashboardSettingsMutationSchema');
 
     for (const proxy of [
-      'socks5://localhost:1080',
+      'ftp://localhost:1080',
       'proxy.example',
-      'socks5://{{env.HOST}}',
+      'ftp://{{env.HOST}}',
       'not-a-proxy {{env.X}}',
       'https://{{! comment}}',
       'https://{{foo}}',
@@ -235,4 +235,11 @@ describe('dashboard plugin control-plane contracts', () => {
     expect(mutation.safeParse({ ...value, options: { token: 'secret' } }).success).toBe(false);
     expect(mutation.safeParse({ ...value, currentSecrets: { token: 'secret' } }).success).toBe(false);
   });
+});
+
+test.each(['socks', 'socks5', 'socks5h'])('accepts %s dashboard proxy settings and templates', (scheme) => {
+  const mutation = schema('DashboardSettingsMutationSchema');
+  for (const proxy of [`${scheme}://user:password@localhost:1080`, `${scheme}://{{env.HOST}}:{{env.PORT}}`]) {
+    expect(mutation.parse({ proxy })).toEqual({ proxy });
+  }
 });

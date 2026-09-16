@@ -351,7 +351,9 @@ Dashboard 默认位于 `http://127.0.0.1:9317/dashboard`，用于管理 Provider
 
 ## 网络与安全
 
-顶层 `proxy` 可以配置默认 HTTP(S) 代理；Provider 可以继承、覆盖或通过 `false` 禁用它。`api` Provider 还可以通过 `headers` 设置上游请求头。
+顶层 `proxy` 可以配置默认 HTTP(S) / SOCKS5 代理；Provider 可以继承、覆盖或通过 `false` 禁用它。`api` Provider 还可以通过 `headers` 设置上游请求头。
+
+SOCKS5 支持 `socks://`、`socks5://` 和 `socks5h://`，可携带经过 URL 编码的用户名和密码，例如 `socks5://user:password@127.0.0.1:1080`。三种写法均由代理解析目标域名，默认端口为 1080，适用于模型请求、OAuth 请求和插件实时连接。
 
 AIO Proxy 进程目前只允许绑定到 `127.0.0.1`、`::1` 或 `localhost`，但可以运行在个人电脑、远程服务器或容器中。需要远程访问时，可以通过反向代理、隧道或网关暴露服务，并在外层配置 TLS、身份认证和访问控制。
 

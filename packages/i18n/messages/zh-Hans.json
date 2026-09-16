@@ -555,7 +555,7 @@
       "api_keys_remove": "移除密钥 {label}",
       "api_keys_unnamed": "（无标签）",
       "api_keys_save": "保存密钥",
-      "default_proxy": "默认 HTTP(S) 代理",
+      "default_proxy": "默认 HTTP(S) / SOCKS5 代理",
       "proxy_placeholder_configured": "已配置（输入新 URL 以替换）",
       "proxy_placeholder_empty": "http://proxy.example:8080",
       "proxy_description": "未单独配置代理的提供商会继承此值。",

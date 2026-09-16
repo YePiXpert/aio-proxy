@@ -245,12 +245,12 @@ test('a valid root proxy template replaces the authored value without exposing i
   });
 });
 
-test('invalid port, SOCKS proxy, and malformed template return 422 without changing config bytes', async () => {
+test('invalid port, unsupported proxy, and malformed template return 422 without changing config bytes', async () => {
   await withSettingsFixture(async ({ configPath, routes }) => {
     const before = readFileSync(configPath, 'utf8');
     for (const body of [
       { port: 0 },
-      { proxy: 'socks5://proxy.example:1080' },
+      { proxy: 'ftp://proxy.example:1080' },
       { proxy: 'https://{{#if true}}proxy.example{{/if}}' },
     ]) {
       const response = await put(routes, body);

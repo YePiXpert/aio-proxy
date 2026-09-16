@@ -196,7 +196,7 @@ test('submitting the expanded baseURL retains the authored template', async () =
   });
 });
 
-test('malformed template or expanded SOCKS proxy returns 422 without altering the file', async () => {
+test('malformed template or expanded unsupported proxy returns 422 without altering the file', async () => {
   await withNetworkFixture(async (routes, configPath) => {
     const before = readFileSync(configPath, 'utf8');
 
@@ -215,8 +215,8 @@ test('malformed template or expanded SOCKS proxy returns 422 without altering th
     expect(malformed.status).toBe(422);
     expect(readFileSync(configPath, 'utf8')).toBe(before);
 
-    process.env['PROVIDER_PROXY'] = 'socks://proxy.example:1080';
-    const socks = await routes.request('/providers/api', {
+    process.env['PROVIDER_PROXY'] = 'ftp://proxy.example:1080';
+    const unsupported = await routes.request('/providers/api', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -229,7 +229,28 @@ test('malformed template or expanded SOCKS proxy returns 422 without altering th
         enabled: true,
       }),
     });
-    expect(socks.status).toBe(422);
+    expect(unsupported.status).toBe(422);
     expect(readFileSync(configPath, 'utf8')).toBe(before);
+  });
+});
+
+test.each(['socks', 'socks5', 'socks5h'])('persists a templated %s provider proxy', async (scheme) => {
+  await withNetworkFixture(async (routes, configPath) => {
+    process.env['PROVIDER_PROXY'] = `${scheme}://user:password@proxy.example:1080`;
+    const response = await routes.request('/providers/api', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        kind: 'api',
+        id: 'api',
+        protocol: 'openai-response',
+        baseURL: 'https://api.example/v1',
+        proxy: '{{env.PROVIDER_PROXY}}',
+        models: ['gpt-test'],
+        enabled: true,
+      }),
+    });
+    expect(response.status).toBe(200);
+    expect(onDisk(configPath).providers.api.proxy).toBe('{{env.PROVIDER_PROXY}}');
   });
 });

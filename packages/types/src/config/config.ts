@@ -139,7 +139,7 @@ const PluginsAuthoringInputSchema = z
   .default([])
   .superRefine(refineUniquePlugins);
 
-const CONFIG_PROXY_DESCRIPTION = 'Default HTTP(S) proxy URL inherited by providers that omit their own proxy.';
+const CONFIG_PROXY_DESCRIPTION = 'Default HTTP(S) / SOCKS5 proxy URL inherited by providers that omit their own proxy.';
 
 export const ModelContextAggregation = { Min: 'min', Max: 'max' } as const;
 
